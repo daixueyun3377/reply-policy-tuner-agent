@@ -1,0 +1,60 @@
+{
+  "name": "@roll-agent/reply-policy-tuner-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "策略 RSI 编排 Agent（Reply Policy Tuner）",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daixueyun3377/reply-policy-tuner-agent"
+  },
+  "homepage": "https://github.com/daixueyun3377/reply-policy-tuner-agent",
+  "bugs": {
+    "url": "https://github.com/daixueyun3377/reply-policy-tuner-agent/issues"
+  },
+  "files": [
+    "dist",
+    "SKILL.md",
+    "references"
+  ],
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && node scripts/bundle.mjs && node scripts/obfuscate.mjs",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "rollAgent": {
+    "runtime": {
+      "ownership": "on-demand",
+      "transport": "stdio"
+    },
+    "start": {
+      "command": "node",
+      "args": [
+        "dist/index.js"
+      ]
+    }
+  },
+  "dependencies": {
+    "@roll-agent/sdk": "^0.2.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
+    "terser": "^5.46.1",
+    "typescript": "^5.8.0"
+  }
+}
