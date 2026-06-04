@@ -88,14 +88,21 @@ switch (ev.orchestration.action) {
 
 Judge 默认启用（`judgeEnabled` 省略或为 `true`）；显式传 `judgeEnabled=false` 时 L4 不调用，`judgeRecommendedForPublish` 视为通过。须 token 具备 `reply-policy:judge` scope。
 
-### validate / evaluate / update 分工（必读）
+### validate / preview / evaluate / update 分工（必读）
 
 ```text
 validate_patch (valid: true)
-  → 不向用户要「确认写入」
-  → 自动继续 submit_evaluate_policy_patch
-  → 展示 evaluationSummaryMarkdown + format_policy_preview
-  → 仅此时问「是否确认保存？」（仅指 update_policy）
+  → 不向用户要确认，自动继续 preview
+
+preview_policy_effect + format_policy_preview
+  → 展示策略修改内容 + 新旧话术对比
+  → 停顿，引导用户选择「按这个做评估」还是「继续改策略」
+  → 用户选「评估」→ 执行 submit_evaluate_policy_patch
+  → 用户选「继续改」→ 回到 propose 重新生成 patch
+
+submit_evaluate_policy_patch
+  → 展示 evaluationSummaryMarkdown
+  → 仅此后问「是否确认保存？」（仅指 update_policy）
   → 用户明确同意后 update_policy
 ```
 
@@ -106,11 +113,11 @@ validate_patch (valid: true)
 | 反模式 | 正确做法 |
 |--------|----------|
 | **evaluate 完成后同一轮直接 `update_policy`**（不停顿、不等用户新消息确认） | evaluate 展示结果后**必须停顿**，等用户在**下一轮消息**中明确说「确认保存」才能 `update_policy`。用户说「继续」只授权 evaluate，不授权写入 |
-| preview 展示后问「确认落库」或等用户确认才继续 evaluate | preview 后自动继续 evaluate，不停顿 |
-| 用户说「继续」后一口气执行 evaluate + update_policy | 「继续」仅授权 evaluate；evaluate 完成后必须展示结果并重新等确认 |
+| preview 展示后直接自动跑 evaluate，不停顿等用户确认 | preview 展示策略修改 + 话术对比后**必须停顿**，引导用户选「按这个评估」还是「继续改」；用户确认评估后才跑 evaluate |
+| 用户在 preview 后说「评估 / 可以」就一口气执行 evaluate + update_policy | preview 后的确认仅授权 evaluate；evaluate 完成后必须展示结果并重新等落库确认 |
 | `validate_patch` 通过后问「确认写入」或「确认后 evaluate + update」 | 说「校验通过，接下来做回放评估」并执行 evaluate；**保存确认只在 evaluate 展示之后** |
-| evaluate 超时/失败，仅 preview 成功，仍问「继续写入吗」或 `update_policy` | 说明评估未完成；减 case 重试 evaluate；**不得**写入 |
-| evaluate 超时后向用户提议「跳过评估直接写入」或问「要不要先保存等会再试」 | evaluate 是 RSI 安全防线（第 4 步），不可跳过。只能：1）减少 case 数量重试；2）排查服务端超时原因；3）等服务恢复后重试。**零容忍** |
+| evaluate 超时/失败，仅 preview 成功，仍问「继续写入吗」或 `update_policy` | 说明评估未完成；tool 已自动降级重试，仍失败时不得写入 |
+| evaluate 超时后向用户提议「跳过评估直接写入」或问「要不要先保存等会再试」 | evaluate 是 RSI 安全防线，不可跳过。tool 内置「超时自动减 case 重试一次」；两次都超时时如实告知用户服务繁忙、稍后重试。**零容忍跳过** |
 | `ready_to_publish` / 评估全过，未展示评估摘要与对比就直接 `update_policy` 或说「已生效」 | 先展示 `evaluationSummaryMarkdown` + `format_policy_preview` → 等运营明确「确认写入」 |
 | 用户第二轮改需求（如「其他不要变」），跳过 evaluate 直接写入 | 新 patch → validate → evaluate → 展示 → 确认 → `update_policy` |
 | `publishBlocked === true` 仍 `update_policy`，或问「是否确认写入」 | 回 Propose → validate → evaluate，直至可发布 |

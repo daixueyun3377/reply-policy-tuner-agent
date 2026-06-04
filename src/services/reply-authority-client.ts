@@ -34,6 +34,7 @@ interface ReplyAuthorityRequestMeta {
 
 interface ReplyAuthorityRequestErrorOptions extends ErrorOptions {
   readonly meta: ReplyAuthorityRequestMeta;
+  readonly timedOut?: boolean;
 }
 
 function formatRequestMeta(meta: ReplyAuthorityRequestMeta): string {
@@ -46,12 +47,20 @@ function formatRequestMeta(meta: ReplyAuthorityRequestMeta): string {
 
 export class ReplyAuthorityRequestError extends Error {
   readonly meta: ReplyAuthorityRequestMeta;
+  /** 是否因请求超时（AbortError）导致 */
+  readonly timedOut: boolean;
 
   constructor(message: string, options: ReplyAuthorityRequestErrorOptions) {
     super(`${message} (${formatRequestMeta(options.meta)})`, { cause: options.cause });
     this.name = "ReplyAuthorityRequestError";
     this.meta = options.meta;
+    this.timedOut = options.timedOut ?? false;
   }
+}
+
+/** 判断错误是否为 Reply Authority 请求超时（用于 evaluate 降级重试） */
+export function isReplyAuthorityTimeout(error: unknown): boolean {
+  return error instanceof ReplyAuthorityRequestError && error.timedOut;
 }
 
 // ========== End inlined ==========
@@ -149,6 +158,7 @@ function wrapError(error: unknown, meta: RequestMeta): ReplyAuthorityRequestErro
   if (error instanceof Error && error.name === "AbortError") {
     return new ReplyAuthorityRequestError("Reply Authority Service 请求超时。", {
       cause: error,
+      timedOut: true,
       meta: { url: meta.url, timeoutMs: meta.timeoutMs, requestId: meta.requestId },
     });
   }

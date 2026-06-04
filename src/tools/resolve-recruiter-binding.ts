@@ -41,13 +41,13 @@ export const resolveRecruiterBindingTool = defineTool({
       throw new Error("无法验证当前账号权限，请检查 Token 配置是否正确。");
     }
 
-    const { tenantIds, role } = authResult.data;
+    const { tenantIds } = authResult.data;
 
     // Admin token 的 tenantIds 为 null 表示可管理所有租户
     if (tenantIds !== null && !tenantIds.includes(resolvedTenantId)) {
       const displayName = binding.data.username;
       throw new Error(
-        `你没有管理「${displayName}」回复策略的权限。当前账号${role === "admin" ? "可管理的运营人员不包含该用户" : "只能管理自己的策略"}，请联系管理员开通权限。`,
+        `「${displayName}」对应的策略你暂时无权限修改，请联系管理员。`,
       );
     }
 
