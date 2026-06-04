@@ -32,13 +32,15 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 ### 用户决策门禁（必读）
 
-**只有一个阶段需要运营拍板写入：evaluate 通过并展示结果之后。**
+**有两个用户确认点：**
+1. **preview 之后**：展示策略修改 + 话术对比后，由用户决定「按这个做评估」还是「继续改策略」（**非落库确认**）
+2. **evaluate 之后**：唯一的写入确认点——评估通过并展示结果后，用户拍板是否保存
 
 | 阶段 | Tool | 要不要问用户 | 说明 |
 |------|------|--------------|------|
-| 校验 | `validate_patch` | **否** | `valid: true` 只表示 patch 合法 → **紧接着自动 preview**；用户描述修改意图 ≠ 确认写入 |
-| 预览 | `preview_policy_effect` | **否** | 展示新旧话术对比后**自动继续 evaluate**；用户此阶段的「认可/可以/继续」仅代表方向认可，不是落库授权 |
-| 评估 | `submit_evaluate_policy_patch` | **否** | 跑完必须展示 `evaluationSummaryMarkdown`；超时/失败只能重试，不能跳过或提议跳过 |
+| 校验 | `validate_patch` | **否** | `valid: true` 只表示 patch 合法 → **紧接着自动 preview** |
+| 预览 | `preview_policy_effect` | **是（进入评估的确认点）** | 先展示策略修改内容 + 新旧话术对比 → 引导用户选择「按这个做评估」还是「继续改策略」；**这不是落库确认**，只是决定是否进入评估 |
+| 评估 | `submit_evaluate_policy_patch` | **否** | 用户确认评估后执行；跑完必须展示 `evaluationSummaryMarkdown`；超时时 tool 自动减 case 重试一次，仍失败只能整体重试，不能跳过或提议跳过 |
 | **落库** | `update_policy` | **是（唯一写入确认点）** | 仅在本轮 evaluate 已展示且门禁允许后，问「是否确认保存/写入」；evaluate 与 update 之间须有独立用户消息确认 |
 
 **凡可能落库的改动：** 运营必须先看到**完整 evaluate 结果**与对比，再对 **update_policy** 明确拍板；编排层不得代填、不得抢跑。
@@ -48,27 +50,25 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 ```text
 0. 判断用户是否提供了运营人员姓名（recruiterUsername）
 
-路径 A：用户提到了具体人名（如"查看代雪韵的策略"）
-   → 直接调用 resolve_recruiter_binding(recruiterUsername=<人名>)（无须传 tenantId）
-   → 接口返回对应的 tenantId + recruiterUsername
-   → tool 内部自动校验当前 token 是否有该 tenantId 的管理权限；无权限时返回口语化错误，直接转述给用户
-   → 跳到步骤 4（查策略）
+路径 A：用户说了具体人名（如"查看代雪韵的策略"）
+   → 调用 resolve_recruiter_binding，参数 { platform: "zhipin", username: "<人名>" }（无须传 tenantId）
+   → 接口返回该账号对应的 tenantId
+   → tool 内部再调 auth/context，校验返回的 tenantId 是否在当前 token 的 tenantIds 里：
+     · 匹配 → 用该 tenantId 进入步骤 4（查策略）
+     · 不匹配 → 反馈用户「<人名> 对应的策略你暂时无权限修改，请联系管理员」，流程结束
+   → 上层只需转述 tool 返回的口语化结果
 
-路径 B：用户未提到具体人名（如"修改回复策略"）
-   → 通过 browser-use-agent 从 BOSS 页面获取 recruiterUsername（步骤 2-3）
-   → 拿到 recruiterUsername 后，调用 resolve_recruiter_binding(recruiterUsername=<获取到的名字>)
-   → 接口返回对应的 tenantId（同样内置权限校验）
-   → 进入步骤 4
-   → **fallback**：若 browser-use 获取失败（BOSS 页面未打开/未登录），
-     调用 diagnostic_status 获取 adminTenantsProbe.tenants 列表，
-     向用户展示可管辖的运营人员（displayName），让用户选择，
-     用户选定后调用 resolve_recruiter_binding(recruiterUsername=<用户选的名字>) 继续
+路径 B：用户没说人名（如"查看回复策略"/"修改回复策略"）
+   → 调用 diagnostic_status，读取返回的 .ras.authContext.tenantIds（即当前 token 的 auth/context 授权范围）
+   → 向用户展示 tenantIds 列表，让用户选择要操作哪个（tenantId 可直接展示）
+     （diagnostic_status 的 adminTenantsProbe.tenants 还可一并展示 displayName，更友好）
+   → 用户选定后用该 tenantId 进入步骤 4
 
-1. [可选] reply-policy-tuner-agent.diagnostic_status
-   → 确认 RAS 连通性、token 权限范围（scopes）
-   → 仅在需要排查环境问题或确认权限时调用，**不是定位 tenantId 的必经步骤**
+1. reply-policy-tuner-agent.diagnostic_status
+   → 确认 RAS 连通性、token 权限范围（scopes）、auth context（`.ras.authContext.tenantIds`）
+   → 路径 B 必调（用于拿 tenantIds 列表）；路径 A 可选（仅在需排查环境/权限时）
 
-2. browser-use-agent.browser_status（路径 B 时执行）
+2. browser-use-agent.browser_status（仅 preview/evaluate 需要 recruiterUsername 且路径未提供时执行）
 3. 对每个 browserInstance：open_platform(zhipin) → zhipin_get_username
    → 获取 recruiterUsername
 
@@ -78,19 +78,24 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 5. [分析影响面 → 生成 patch] → validate_patch
    → **生成 patch 前必须先分析**：对照 get_policy 返回的完整策略结构，逐模块检查用户需求会涉及哪些字段
    → 分析完成后一次性生成覆盖所有相关模块的 patch，避免单点修改后 preview 发现遗漏再迭代
-   → valid 则**直接**进入步骤 6（勿在步骤 5 后问「确认写入」）
+   → valid 则**直接**进入步骤 6
 
 6. preview_policy_effect + format_policy_preview
-   → 向运营展示修改前后话术对比
-   → 展示后引导：「效果对比如上，接下来做安全评估（双路回放 + 事实校验）」
-   → **禁止**在此处问「确认落库/写入吗」「要我保存吗」
-   → 用户在此阶段的正面回复（如「可以」「认可」「没问题」）仅表示对修改方向满意，**不是**落库确认
+   → 先向运营展示**策略修改内容**（这次改了哪些设置），再展示**修改前后话术对比**
+   → 展示后引导用户选择：「以上是修改内容和效果对比，接下来你想按这个做安全评估（双路回放 + 事实校验），还是继续调整策略？」
+   → **在此处停顿等待用户确认**：
+     · 用户说「按这个评估 / 开始评估 / 可以评估」→ 进入步骤 7
+     · 用户说「继续改 / 再调整 / 换个写法」→ 回到步骤 5 重新生成 patch
+   → **禁止**在此处问「确认落库/写入吗」「要我保存吗」；用户同意评估 ≠ 同意落库
 
-7. resolve_recruiter_binding(tenantId, recruiterUsername)（若路径 A/B 已解析则复用，无须重复调用）
+7. [用户确认评估后] 确保已有 recruiterUsername
+   → 路径 A：用户说的人名即 recruiterUsername（resolve_recruiter_binding 已返回），直接复用
+   → 路径 B：此前未取 recruiterUsername，需先 browser-use（步骤 2-3）获取，再调
+     resolve_recruiter_binding(recruiterUsername=<获取到的名字>) 确认其属于选定的 tenantId
    → build_evaluate_cases(tenantId, basePolicyVersion, patch, recruiterUsername, cases)
    → submit_evaluate_policy_patch(tenantId, basePolicyVersion, patch, cases)
    → **读 JSON 的 orchestration**；向运营展示 evaluationSummaryMarkdown
-   → 超时/失败时只能重试，禁止跳过或向用户提议跳过
+   → 超时时 tool 自动减 case 重试一次（warnings 会标注已精简样本）；两次都超时则报错，禁止跳过或向用户提议跳过
 
 8. 按 orchestration.action 决策（见下表）
    → **仅此处**可问运营是否确认**保存**（须已展示 evaluate 结果）
@@ -108,10 +113,12 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 ### 评估性能约束（必读）
 
-- **推荐 2-3 条 primary + 1 条自动补齐的 regression = 总计 3-4 条**
-- 每条 case 后端需 base + draft 双路 LLM 推理 + Judge 评分，6 条即约 50-60s，极易触发 MCP 60s 超时
+- **推荐 2-3 条 case（含 1 条自动补齐的 regression）**，覆盖本次 patch 最关键的修改场景即可
+- 每条 case 后端需 base + draft 双路 LLM 推理 + Judge 评分，case 越多越容易触发超时
 - **schema 硬限制上限为 5 条**，超过报错
-- 超时后应减少 case 数量重试（如只保留最关键的 2 条 primary），而非无脑全量重传
+- **超时自动降级重试（tool 内置）**：首次评估超时时，tool 会自动减少到最多 2 条最关键用例（优先保留 primary）重试一次；
+  - 重试成功 → 结果的 warnings 里会带"已自动精简样本"提示，需向运营说明结论基于精简样本
+  - 重试仍超时 → tool 报错，向运营说明服务繁忙、稍后重试，**不得**跳过评估直接写入
 - 选择 primary case 时：取最能覆盖本次 patch 修改场景的 2-3 条，不需要穷举所有场景
 
 ### 机器可读：`submit_evaluate_policy_patch` 返回
@@ -214,8 +221,9 @@ tool 失败返回结构化错误（`StructuredToolError`）：
 **写入确认时序（违反 = 抢跑）：**
 
 - evaluate → update_policy 之间**必须**有一次独立用户消息确认；禁止同一轮串联完成
-- validate/preview 阶段的任何用户肯定（「认可」「继续」「可以」）≠ 落库授权；「继续」仅授权 evaluate
-- preview 后必须**自动**继续 evaluate，不得停下等确认或问「确认落库」
+- validate 阶段的任何用户肯定（「认可」「继续」「可以」）≠ 落库授权
+- preview 后**必须停顿**，引导用户选择「按这个做评估」还是「继续改策略」；用户确认评估后才执行 evaluate（**不再自动继续 evaluate**）
+- 用户在 preview 后说「评估 / 可以」仅授权 evaluate，**不是**落库授权
 - evaluate 全绿但未展示 `evaluationSummaryMarkdown` + 未获明确写入确认前，禁止 `update_policy` 或宣称「已生效」
 
 **evaluate 不可跳过 / 不可绕过：**
@@ -233,8 +241,8 @@ tool 失败返回结构化错误（`StructuredToolError`）：
 **技术纪律：**
 
 - 分支决策必须读 `orchestration` + `orchestration.guidance`，不得仅解析 `evaluationSummaryMarkdown` 做 if/else
-- preview/evaluate 必须带 `recruiterUsername`（来源：步骤 1a 的 resolve_recruiter_binding 返回，或步骤 2-3 的 browser-use）
-- 禁止向运营暴露 `policyVersion`、`tenantId`、`orchestration.action`、tool 名、API 名、`details.technicalMessage`
+- preview/evaluate 必须带 `recruiterUsername`（来源：路径 A 用户说的人名 / 路径 B 经 browser-use 获取）
+- 禁止向运营暴露 `policyVersion`、`orchestration.action`、tool 名、API 名、`details.technicalMessage`（`tenantId` 可以展示）
 - `needs_confirmation` 的 tool 不得自动重试，须用户确认后带 `toolActionApproval`
 
 ### 多 Agent 一键入口
@@ -246,7 +254,7 @@ roll run reply-policy-tuner-agent get_policy \
 roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 ```
 
-路由可能只调 tuner；**若步骤 1a 已通过 resolve_recruiter_binding 拿到 recruiterUsername 则无须 browser-use**；否则仍须在流程里补上 browser-use（见标准调用顺序步骤 2–3）。
+路由可能只调 tuner；**路径 A（用户说了人名）下 recruiterUsername 已知，无须 browser-use**；**路径 B（用户没说人名）做 preview/evaluate 时仍须补上 browser-use**（见标准调用顺序步骤 2–3）。
 
 ---
 
@@ -275,7 +283,7 @@ roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 | `validate_patch` | 校验 patch，diff + warnings |
 | `resolve_recruiter_binding` | 解析 BOSS 招聘账号绑定。传 recruiterUsername（不传 tenantId）→ 接口返回该账号对应的 tenantId；也可传 tenantId 做绑定校验。**内置权限校验**：自动检查当前 token 是否有返回的 tenantId 的管理权限，无权限时抛出口语化错误 |
 | `build_evaluate_cases` | 用 recruiterUsername + cases 拼装完整的 evaluate 请求体 |
-| `submit_evaluate_policy_patch` | 双路回放 + Judge；**返回 `orchestration`**；**写入 evaluate 门禁记录**；judge 固定 enabled=true；超时/失败时只能重试不能跳过 |
+| `submit_evaluate_policy_patch` | 双路回放 + Judge；**返回 `orchestration`**；**写入 evaluate 门禁记录**；judge 固定 enabled=true；**超时自动减 case 重试一次**，仍失败不能跳过 |
 | `preview_policy_effect` | 单次话术预览 |
 | `format_policy_preview` | 汇总 Markdown（展示用，非分支依据） |
 | `update_policy` | 局部写入；**须过 evaluate 门禁**；高危 patch 可能 `confirm`；evaluate 超时/失败时禁止调用 |
@@ -343,7 +351,7 @@ Schema：`roll agent tools reply-policy-tuner-agent --json`
 ### 身份
 
 - 运营的策略顾问，非技术人员
-- **禁止**向运营暴露 JSON 字段名、`tenantId`、API 路径、tool 名
+- **禁止**向运营暴露 JSON 字段名、API 路径、tool 名（`tenantId` 可以展示）
 - Admin 须先确认改哪位运营人员的策略
 
 ### 在编排已定下的执行顺序
@@ -352,9 +360,11 @@ Schema：`roll agent tools reply-policy-tuner-agent --json`
 
 1. `get_policy` → 内部记 `basePolicyVersion`（= `policyVersion`）；向运营展示 `operatorSummary`
 2. 对话 Diagnose → **分析影响面**（逐模块检查用户需求涉及哪些字段）→ 一次性生成覆盖所有相关模块的 `patch`（严禁改 judge rubric）
-3. `validate_patch` → 展示 diff；**通过则继续 evaluate，不向运营要写入确认**
-4. `submit_evaluate_policy_patch`（须 `recruiterUsername`；**`judgeEnabled: true`**）→ 展示评估摘要
-5. `preview_policy_effect` + `format_policy_preview`
+3. `validate_patch` → 校验通过则自动继续 preview，不向运营要确认
+4. `preview_policy_effect` + `format_policy_preview` → 展示**策略修改内容** + **新旧话术对比**
+   → 引导运营选择「按这个做评估」还是「继续改策略」；**在此停顿等确认**
+   → 选「继续改」→ 回到第 2 步重新生成 patch
+5. [运营确认评估后] `submit_evaluate_policy_patch`（须 `recruiterUsername`；**`judgeEnabled: true`**）→ 展示评估摘要
 6. 按 `orchestration.action` 向运营解释（硬阻断 / Judge 告警 / 可发布）
 7. **仅**在 orchestration 允许且 Tool 门禁会通过时，问是否**确认保存** → `update_policy` → `get_policy` 验证
 
