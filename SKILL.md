@@ -36,49 +36,41 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 | 阶段 | Tool | 要不要问用户 | 说明 |
 |------|------|--------------|------|
-| 校验 | `validate_patch` | **否**（不要问「确认写入」） | `valid: true` 只表示 patch 合法 → **紧接着自动 preview**，可展示 diff |
-| 预览 | `preview_policy_effect` | **否**（不要问「确认落库」） | 展示新旧话术对比后，引导「接下来做安全评估」→ **自动继续 evaluate**；用户此阶段的肯定仅代表对方向认可 |
-| 评估 | `submit_evaluate_policy_patch` | **否** | 跑完必须把 `evaluationSummaryMarkdown` 展示给用户 |
-| **落库** | `update_policy` | **是（唯一写入确认点）** | 仅在本轮 evaluate 已展示且门禁允许后，问「是否确认保存/写入」 |
-| `evaluate` **超时 / 失败** | — | **否** | 说明评估未完成；重试 evaluate | **禁止** `update_policy`；**禁止**因 preview 成功问写入；**禁止**向用户提议「跳过评估直接写入」或「先保存后评估」；**禁止**把超时当作「可忽略的失败」|
-
-**禁止把 preview 当成写入确认：** preview 对比满意 ≠ 可以问「确认落库吗」。preview 展示后应说「接下来做安全评估」并**自动执行** evaluate，**不得**等用户确认才评估。
-
-**禁止把 validate 当成写入确认：** `valid: true` ≠ 可以问「确认写入吗」。
-
-**禁止捆绑话术（反例）：**
-
-> ~~效果对比如上，要我确认落库吗？~~
-> ~~验证已通过，确认写入吗？确认后我会执行 evaluate + update_policy 正式落库。~~
-> ~~认可收敛了，语气克制了。要我确认落库吗？~~
-
-**正确分步引导：**
-
-1. validate 后：「补丁校验通过，我先做效果预览。」→ 调用 preview
-2. preview 后：「效果对比如上，接下来做安全评估（双路回放 + 事实校验）。」→ **自动**调用 evaluate（不等用户确认）
-3. evaluate 展示后：「评估结果如下……是否**确认保存**到策略里？」→ 用户同意后才 `update_policy`
+| 校验 | `validate_patch` | **否** | `valid: true` 只表示 patch 合法 → **紧接着自动 preview**；用户描述修改意图 ≠ 确认写入 |
+| 预览 | `preview_policy_effect` | **否** | 展示新旧话术对比后**自动继续 evaluate**；用户此阶段的「认可/可以/继续」仅代表方向认可，不是落库授权 |
+| 评估 | `submit_evaluate_policy_patch` | **否** | 跑完必须展示 `evaluationSummaryMarkdown`；超时/失败只能重试，不能跳过或提议跳过 |
+| **落库** | `update_policy` | **是（唯一写入确认点）** | 仅在本轮 evaluate 已展示且门禁允许后，问「是否确认保存/写入」；evaluate 与 update 之间须有独立用户消息确认 |
 
 **凡可能落库的改动：** 运营必须先看到**完整 evaluate 结果**与对比，再对 **update_policy** 明确拍板；编排层不得代填、不得抢跑。
-
-| 情况 | 编排层必须做什么 | 禁止做什么 |
-|------|------------------|------------|
-| `validate_patch` 且 `valid: true` | 展示 diff（可选）→ **继续 evaluate**（无需写入确认） | **禁止**此时问「确认写入」；**禁止**承诺「确认后执行 evaluate + update」 |
-| `submit_evaluate_policy_patch` **成功**且 Hard+Fact 通过 | 展示评估 + 对比 → **仅此时**问是否确认**保存** | **禁止**未展示评估就 `update_policy`；**禁止**宣称「已生效」 |
-| 用户**新一轮**修改意图 | 新 patch：validate → evaluate → 展示 → 再要**保存**确认 | **禁止**把改需求当确认写入 |
-| `evaluate` **超时 / 失败** | 说明评估未完成；重试 evaluate | **禁止** `update_policy`；**禁止**因 preview 成功问写入；**禁止**向用户提议「跳过评估直接写入」或「先保存后评估」；**禁止**把超时当作「可忽略的失败」|
-| `preview_policy_effect` 成功 | 与 evaluate 结果一并展示 | **禁止**用 preview 替代 evaluate |
-
-**唯一可视为「确认写入/保存」的表述**（须在本轮已展示 **evaluate** 之后，且仅指 `update_policy`）：如「确认保存」「确认写入」「继续执行写入」——**不是** validate 通过后的提前确认，**不是**用户描述想改什么。
 
 ### 标准调用顺序
 
 ```text
-1. reply-policy-tuner-agent.diagnostic_status
-   → 定 tenantId：读 .ras.authContext.tenantIds（数组，须用户选定；不是顶层 tenantId）
+0. 判断用户是否提供了运营人员姓名（recruiterUsername）
 
-2. browser-use-agent.browser_status
+路径 A：用户提到了具体人名（如"查看代雪韵的策略"）
+   → 直接调用 resolve_recruiter_binding(recruiterUsername=<人名>)（无须传 tenantId）
+   → 接口返回对应的 tenantId + recruiterUsername
+   → tool 内部自动校验当前 token 是否有该 tenantId 的管理权限；无权限时返回口语化错误，直接转述给用户
+   → 跳到步骤 4（查策略）
+
+路径 B：用户未提到具体人名（如"修改回复策略"）
+   → 通过 browser-use-agent 从 BOSS 页面获取 recruiterUsername（步骤 2-3）
+   → 拿到 recruiterUsername 后，调用 resolve_recruiter_binding(recruiterUsername=<获取到的名字>)
+   → 接口返回对应的 tenantId（同样内置权限校验）
+   → 进入步骤 4
+   → **fallback**：若 browser-use 获取失败（BOSS 页面未打开/未登录），
+     调用 diagnostic_status 获取 adminTenantsProbe.tenants 列表，
+     向用户展示可管辖的运营人员（displayName），让用户选择，
+     用户选定后调用 resolve_recruiter_binding(recruiterUsername=<用户选的名字>) 继续
+
+1. [可选] reply-policy-tuner-agent.diagnostic_status
+   → 确认 RAS 连通性、token 权限范围（scopes）
+   → 仅在需要排查环境问题或确认权限时调用，**不是定位 tenantId 的必经步骤**
+
+2. browser-use-agent.browser_status（路径 B 时执行）
 3. 对每个 browserInstance：open_platform(zhipin) → zhipin_get_username
-   → 用户选定 recruiterUsername
+   → 获取 recruiterUsername
 
 4. reply-policy-tuner-agent.get_policy(tenantId)
    → 编排层从 JSON 记下 `policyVersion` 作 `basePolicyVersion`（勿向运营展示）；对运营用 `operatorSummary` 展示策略要点
@@ -94,7 +86,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
    → **禁止**在此处问「确认落库/写入吗」「要我保存吗」
    → 用户在此阶段的正面回复（如「可以」「认可」「没问题」）仅表示对修改方向满意，**不是**落库确认
 
-7. resolve_recruiter_binding(tenantId, recruiterUsername)
+7. resolve_recruiter_binding(tenantId, recruiterUsername)（若路径 A/B 已解析则复用，无须重复调用）
    → build_evaluate_cases(tenantId, basePolicyVersion, patch, recruiterUsername, cases)
    → submit_evaluate_policy_patch(tenantId, basePolicyVersion, patch, cases)
    → **读 JSON 的 orchestration**；向运营展示 evaluationSummaryMarkdown
@@ -104,35 +96,6 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
    → **仅此处**可问运营是否确认**保存**（须已展示 evaluate 结果）
    → 确认后 alone 调用 `update_policy`（勿与 evaluate 绑在同一句确认里）
 ```
-
-**关键分步引导原则：**
-
-- **preview 后**（步骤 6）：向运营说「接下来做安全评估」或「我去跑一下评估门禁」，然后**自动继续** evaluate，**不等用户确认**
-- **evaluate 后**（步骤 7→8）：展示评估结果，**必须停顿等待用户明确确认写入后才能 `update_policy`**
-- **禁止在同一轮 Agent 执行中连续完成 evaluate + update_policy**：evaluate 完成后必须停下来向用户展示评估结果，等待用户在**下一轮消息**中明确确认写入
-- 用户在 preview 阶段的肯定回复（「认可」「效果不错」「可以」）= 对修改方向认可，≠ 落库授权
-- 用户说「继续」「继续跑评估」= 授权执行 evaluate，≠ 授权 update_policy 写入
-
-**禁止话术（preview 展示后）：**
-
-> ~~效果对比如上，要我确认落库吗？~~
-> ~~看起来符合预期，确认写入？~~
-
-**禁止行为（evaluate 完成后）：**
-
-> ~~evaluate 通过，直接执行 update_policy 落库~~
-> ~~用户说了「继续」，一口气跑完 evaluate + update_policy~~
-
-**正确话术（preview 展示后）：**
-
-> 效果对比如上。接下来我做安全评估（双路回放 + 事实校验 + Judge 评分），通过后再确认是否保存。
-> 修改效果如上，我继续跑评估门禁。
-
-**正确话术（evaluate 展示后）：**
-
-> 安全评估已通过（Hard Gate ✓、Fact 校验 ✓、Judge 评分 ✓）。以上是完整评估结果，是否**确认保存**到策略里？
-
-**顺序不可颠倒：** validate 通过 ≠ 可写入；preview 满意 ≠ 可写入；evaluate 未成功展示前不得问保存/不得 `update_policy`。**evaluate 与 update_policy 之间必须有一次用户消息确认。**
 
 细节与 batch 示例：`references/orchestration.md`。
 
@@ -248,25 +211,31 @@ tool 失败返回结构化错误（`StructuredToolError`）：
 
 ### 上层禁止
 
-- **evaluate 完成后不停顿直接 `update_policy`**：evaluate 和 update_policy 之间**必须**有一次独立的用户消息确认写入。禁止在同一轮 Agent 执行中串联完成 evaluate → update_policy。用户说「继续」只授权执行 evaluate，不授权写入
-- **preview 展示后问「确认落库/写入吗」或等用户确认才继续 evaluate**：preview 满意 ≠ 落库授权；preview 后必须自动继续 evaluate，不停下来等确认
-- **把用户在 preview 阶段的肯定回复（「认可」「可以」「效果不错」「继续」）当作落库确认**：这仅代表对修改方向认可或授权继续评估，不是 `update_policy` 的授权
-- `validate_patch` 通过后问「确认写入」或说「确认后执行 evaluate + update_policy」（evaluate 与 update 必须拆开，**仅 update 前确认**）
-- 未跑 `submit_evaluate_policy_patch` 就 `update_policy`（含 **evaluate 超时/失败** 仅 preview 成功的情况）
-- **evaluate 超时或失败时**：禁止向用户提议「跳过评估直接写入」「先保存再评估」「评估超时要不要直接写入」。超时只能重试 evaluate 或排查网络/服务端问题。evaluate 是安全防线（RSI 第 4 步），不是可选步骤
-- **evaluate 全绿**（`ready_to_publish`）但未向运营展示 `evaluationSummaryMarkdown` 与对比表、未获**明确**确认写入就 `update_policy`，或宣称「已生效」「策略变更完成」
-- 用户**补充/修正**修改意图后，不重新 evaluate 就写入（新 patch 须完整 validate → evaluate → 展示 → 确认）
-- 把用户本轮的修改需求（如「只要别直呼其名」「把提问方式改为…」）当作写入确认
-- `publishBlocked === true` 时 `update_policy` 或问用户「是否确认写入」
-- `hardRecommendedForPublish === false` 或 `factRecommendedForPublish === false` 时 `update_policy` 或问用户「是否确认写入」
-- 硬阻断后**零写入**：不得以用户口头「先保存 / 后配门店 / 策略已允许」绕过；须等 `publishBlocked === false` 且 Hard/Fact 分项均为 true 且用户明确「确认写入」
-- **`update_policy` 的 patch 必须与最近一次 `submit_evaluate_policy_patch` 的 patch 完全一致**（同一 `tenantId` + `basePolicyVersion` + 内容）；评估失败后换 patch（含删 `factGate.forbiddenWhenMissingFacts`、改行业话术等）须重新 validate → evaluate，否则 Tool 返回 `mismatch` / `missing_evaluate`
-- **禁止用改 `factGate` 规避 Fact 证据**：`contradicted_location` 等阻塞时，不得用删除「具体城市承诺」、放宽 `factGate.mode` 等当作解决办法并 `update_policy`；应改 Reply Authority 门店证据或修订 patch/样本后重评
-- 只解析 `evaluationSummaryMarkdown` 做 if/else（必须读 `orchestration` 与 `orchestration.guidance`）
-- preview/evaluate 不带 `recruiterUsername`（须先 browser-use）
-- 向运营暴露 `policyVersion`、`source`、`tenantId`、`orchestration.action`、`recommendedForPublish`、tool 名、API 名
-- 把 `details.technicalMessage` 直接贴给用户
-- 自动重试 `needs_confirmation` 的 tool（须用户确认后带 `toolActionApproval`）
+**写入确认时序（违反 = 抢跑）：**
+
+- evaluate → update_policy 之间**必须**有一次独立用户消息确认；禁止同一轮串联完成
+- validate/preview 阶段的任何用户肯定（「认可」「继续」「可以」）≠ 落库授权；「继续」仅授权 evaluate
+- preview 后必须**自动**继续 evaluate，不得停下等确认或问「确认落库」
+- evaluate 全绿但未展示 `evaluationSummaryMarkdown` + 未获明确写入确认前，禁止 `update_policy` 或宣称「已生效」
+
+**evaluate 不可跳过 / 不可绕过：**
+
+- 未跑 evaluate 或 evaluate 超时/失败时，禁止 `update_policy`；禁止提议「跳过评估直接写入」「先保存再评估」
+- 用户补充/修正意图后须完整 validate → evaluate → 展示 → 确认，不得复用旧 evaluate
+- `update_policy` 的 patch 必须与最近一次 evaluate 的 patch 完全一致（同 tenantId + basePolicyVersion + 内容），否则 Tool 返回 `mismatch`
+
+**硬阻断约束：**
+
+- `publishBlocked === true` 或 Hard/Fact 任一分项未通过时，禁止 `update_policy` 或问写入确认
+- 用户口头「先保存 / 后配门店 / 策略已允许」在硬阻断时**不是**发布确认
+- 禁止用改 `factGate`（删 `forbiddenWhenMissingFacts`、放宽 mode）规避 Fact 证据阻塞
+
+**技术纪律：**
+
+- 分支决策必须读 `orchestration` + `orchestration.guidance`，不得仅解析 `evaluationSummaryMarkdown` 做 if/else
+- preview/evaluate 必须带 `recruiterUsername`（来源：步骤 1a 的 resolve_recruiter_binding 返回，或步骤 2-3 的 browser-use）
+- 禁止向运营暴露 `policyVersion`、`tenantId`、`orchestration.action`、tool 名、API 名、`details.technicalMessage`
+- `needs_confirmation` 的 tool 不得自动重试，须用户确认后带 `toolActionApproval`
 
 ### 多 Agent 一键入口
 
@@ -277,7 +246,7 @@ roll run reply-policy-tuner-agent get_policy \
 roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 ```
 
-路由可能只调 tuner；**你仍须在流程里补上 browser-use**（见标准调用顺序步骤 2–3）。
+路由可能只调 tuner；**若步骤 1a 已通过 resolve_recruiter_binding 拿到 recruiterUsername 则无须 browser-use**；否则仍须在流程里补上 browser-use（见标准调用顺序步骤 2–3）。
 
 ---
 
@@ -304,7 +273,7 @@ roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 | `diagnostic_status` | 环境 + auth context（`.ras.authContext.tenantIds`）+ Admin 运营人员列表 |
 | `get_policy` | 当前策略 + `policyVersion` |
 | `validate_patch` | 校验 patch，diff + warnings |
-| `resolve_recruiter_binding` | 解析 BOSS 招聘账号绑定（须在 build_evaluate_cases 前调用） |
+| `resolve_recruiter_binding` | 解析 BOSS 招聘账号绑定。传 recruiterUsername（不传 tenantId）→ 接口返回该账号对应的 tenantId；也可传 tenantId 做绑定校验。**内置权限校验**：自动检查当前 token 是否有返回的 tenantId 的管理权限，无权限时抛出口语化错误 |
 | `build_evaluate_cases` | 用 recruiterUsername + cases 拼装完整的 evaluate 请求体 |
 | `submit_evaluate_policy_patch` | 双路回放 + Judge；**返回 `orchestration`**；**写入 evaluate 门禁记录**；judge 固定 enabled=true；超时/失败时只能重试不能跳过 |
 | `preview_policy_effect` | 单次话术预览 |
