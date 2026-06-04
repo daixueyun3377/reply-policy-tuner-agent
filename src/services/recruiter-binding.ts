@@ -12,6 +12,11 @@ const ResolveRecruiterBindingResponseSchema = z.object({
   }),
 });
 
+export interface RecruiterBindingResult {
+  tenantId: string;
+  username: string;
+}
+
 const DEFAULT_RECRUITER_CANDIDATES = ["任思文"] as const;
 
 function configuredRecruiterUsername(): string | undefined {
@@ -41,13 +46,18 @@ function recruiterCandidates(explicitUsername: string | undefined): readonly str
 }
 
 /**
- * 解析 preview / evaluate 所需的 BOSS 招聘账号绑定。
+ * 调用 POST /resolve-recruiter-binding 解析 BOSS 招聘账号绑定。
+ * 接口入参：{ platform: "zhipin", username }
+ * 接口返回：{ tenantId, recruiterBinding: { platform, username, accountId? } }
+ *
+ * 当 tenantId 传入时：校验返回的 tenantId 是否与期望一致（用于 evaluate/preview 前的绑定校验）。
+ * 当 tenantId 未传入时：直接返回接口返回的 tenantId（用于按人名定位 tenant）。
  */
 export async function resolveRecruiterUsername(
-  tenantId: string,
+  tenantId: string | undefined,
   explicitUsername: string | undefined,
   configInput?: ReplyAuthorityConfig,
-): Promise<RasResponse<{ username: string }>> {
+): Promise<RasResponse<RecruiterBindingResult>> {
   for (const username of recruiterCandidates(explicitUsername)) {
     const result = await request(
       {
@@ -59,8 +69,22 @@ export async function resolveRecruiterUsername(
       configInput,
     );
 
-    if (result.ok && result.data?.tenantId === tenantId) {
-      return { ok: true, status: result.status, data: { username } };
+    if (!result.ok || result.data === undefined) {
+      continue;
+    }
+
+    // 未指定 tenantId：直接返回接口解析到的 tenantId
+    if (tenantId === undefined) {
+      return {
+        ok: true,
+        status: result.status,
+        data: { tenantId: result.data.tenantId, username },
+      };
+    }
+
+    // 指定了 tenantId：校验匹配
+    if (result.data.tenantId === tenantId) {
+      return { ok: true, status: result.status, data: { tenantId, username } };
     }
   }
 
