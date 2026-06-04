@@ -1,5 +1,11 @@
 import { defineTool } from "@roll-agent/sdk";
 import { z } from "zod";
+import {
+  capCasesForFirstAttempt,
+  degradeCasesForRetry,
+  formatCapCasesWarning,
+  formatDegradeCasesWarning,
+} from "../evaluate-case-selection.ts";
 import { deriveEvaluationOrchestration } from "../presentation/evaluation-orchestration.ts";
 import { formatEvaluationSummaryMarkdown } from "../presentation/evaluation-summary.ts";
 import { evaluatePolicyPatch, isReplyAuthorityTimeout } from "../services/reply-authority-client.ts";
@@ -7,9 +13,6 @@ import { hashPolicyPatch, recordEvaluatePublishGate } from "../evaluate-publish-
 import { translateRasHttpError } from "../ras-errors.ts";
 import { EvaluationOrchestrationSchema } from "../presentation/evaluation-orchestration.ts";
 import { BuiltCaseSchema, EvaluateSummarySchema } from "../types/reply-policy.ts";
-
-/** 超时降级重试时保留的 case 数量上限（优先保留 primary） */
-const DEGRADED_RETRY_CASE_LIMIT = 2;
 
 const SubmitEvaluatePolicyPatchInputSchema = z.object({
   tenantId: z.string().min(1).describe("目标运营人员 ID（tenantId）"),
@@ -19,7 +22,9 @@ const SubmitEvaluatePolicyPatchInputSchema = z.object({
     .array(BuiltCaseSchema)
     .min(1)
     .max(5)
-    .describe("已拼装完整的评估用例（从 build_evaluate_cases 获取；推荐 2-3 条，超时会自动降级重试一次）"),
+    .describe(
+      "已拼装完整的评估用例（从 build_evaluate_cases 获取；默认 2 条 primary + 1 条 regression；超过 3 条时首次请求前自动裁切；超时再降为 1p+1r 重试一次）",
+    ),
 });
 
 const SubmitEvaluatePolicyPatchOutputSchema = z.object({
@@ -37,28 +42,18 @@ const SubmitEvaluatePolicyPatchOutputSchema = z.object({
 
 type BuiltCase = z.infer<typeof BuiltCaseSchema>;
 
-/**
- * 超时降级：优先保留 primary，再补 regression，最多 DEGRADED_RETRY_CASE_LIMIT 条。
- * 若原本就已 ≤ 上限则返回 undefined（无可降级空间）。
- */
-function degradeCases(cases: BuiltCase[]): BuiltCase[] | undefined {
-  if (cases.length <= DEGRADED_RETRY_CASE_LIMIT) {
-    return undefined;
-  }
-  const primary = cases.filter((c) => c.role === "primary");
-  const regression = cases.filter((c) => c.role === "regression");
-  const reduced = [...primary, ...regression].slice(0, DEGRADED_RETRY_CASE_LIMIT);
-  return reduced;
-}
-
 export const submitEvaluatePolicyPatchTool = defineTool({
   name: "submit_evaluate_policy_patch",
   description:
-    "提交 POST /tenants/:tenantId/reply-policy:evaluate 请求。judgeEnabled 固定为 true。输入须为 build_evaluate_cases 的输出。Hard Gate 或 Fact blocking 未通过时 orchestration.action=rollback_to_propose 且 publishBlocked=true；仅 Judge 未通过时为 decide_with_warnings。超时时自动减少 case 数量重试一次，仍超时则报错。发布前必须调用且必须成功；超时/失败时禁止跳过直接 update_policy；update_policy 须与本次 evaluate 的 patch 完全一致，且 hardRecommendedForPublish 与 factRecommendedForPublish 均为 true、publishBlocked=false",
+    "提交 POST /tenants/:tenantId/reply-policy:evaluate 请求。judgeEnabled 固定为 true。输入须为 build_evaluate_cases 的输出。默认首次评估 2 条 primary + 1 条 regression；传入超过 3 条时首次请求前自动裁切。Hard Gate 或 Fact blocking 未通过时 orchestration.action=rollback_to_propose 且 publishBlocked=true；仅 Judge 未通过时为 decide_with_warnings。超时时自动降为 1 条 primary + 1 条 regression 重试一次，仍超时则报错。发布前必须调用且必须成功；超时/失败时禁止跳过直接 update_policy；update_policy 须与本次 evaluate 的 patch 完全一致，且 hardRecommendedForPublish 与 factRecommendedForPublish 均为 true、publishBlocked=false",
   input: SubmitEvaluatePolicyPatchInputSchema,
   output: SubmitEvaluatePolicyPatchOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Submitting evaluate policy patch for tenant: ${input.tenantId}`);
+
+    const { cases: firstAttemptCases, capped: cappedBeforeFirstAttempt } = capCasesForFirstAttempt(
+      input.cases,
+    );
 
     const callEvaluate = (cases: BuiltCase[]) =>
       evaluatePolicyPatch(input.tenantId, {
@@ -80,24 +75,27 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       });
 
     let result;
-    let usedCases = input.cases;
+    let usedCases = firstAttemptCases;
+    const preAttemptWarnings: string[] = cappedBeforeFirstAttempt
+      ? [formatCapCasesWarning(input.cases.length, firstAttemptCases.length)]
+      : [];
+
     try {
-      result = await callEvaluate(input.cases);
+      result = await callEvaluate(firstAttemptCases);
     } catch (error) {
       if (!isReplyAuthorityTimeout(error)) {
         throw error;
       }
 
-      // 超时降级：减少 case 数量重试一次
-      const degraded = degradeCases(input.cases);
+      const degraded = degradeCasesForRetry(firstAttemptCases);
       if (degraded === undefined) {
         throw new Error(
-          `评估超时：本次 ${input.cases.length} 条用例已是最小规模，仍未在限定时间内完成。请稍后重试，或检查 Reply Authority Service 是否繁忙。`,
+          `评估超时：本次 ${firstAttemptCases.length} 条用例已是最小规模（1 条 primary + 1 条 regression），仍未在限定时间内完成。请稍后重试，或检查 Reply Authority Service 是否繁忙。`,
         );
       }
 
       ctx.logger.info(
-        `Evaluate timed out with ${input.cases.length} cases; retrying with degraded ${degraded.length} cases`,
+        `Evaluate timed out with ${firstAttemptCases.length} cases; retrying with degraded ${degraded.length} cases (1p+1r)`,
       );
 
       try {
@@ -106,7 +104,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       } catch (retryError) {
         if (isReplyAuthorityTimeout(retryError)) {
           throw new Error(
-            `评估两次超时：先后用 ${input.cases.length} 条、${degraded.length} 条用例都未在限定时间内完成。请稍后重试，或减少要评估的场景。`,
+            `评估两次超时：先后用 ${firstAttemptCases.length} 条、${degraded.length} 条用例都未在限定时间内完成。请稍后重试，或减少要评估的场景。`,
           );
         }
         throw retryError;
@@ -138,10 +136,8 @@ export const submitEvaluatePolicyPatchTool = defineTool({
     });
 
     const degradedNotice =
-      usedCases.length < input.cases.length
-        ? [
-            `⚠️ 首次评估超时，已自动减少到 ${usedCases.length} 条最关键用例重新评估（原 ${input.cases.length} 条）。结论基于精简后的样本。`,
-          ]
+      usedCases.length < firstAttemptCases.length
+        ? [formatDegradeCasesWarning(firstAttemptCases.length, usedCases.length)]
         : [];
 
     return {
@@ -152,7 +148,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       recommendedForPublish: data.summary.recommendedForPublish,
       orchestration,
       evaluationSummaryMarkdown: formatEvaluationSummaryMarkdown(data),
-      warnings: [...degradedNotice, ...data.warnings],
+      warnings: [...preAttemptWarnings, ...degradedNotice, ...data.warnings],
     };
   },
 });

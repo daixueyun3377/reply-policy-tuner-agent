@@ -117,7 +117,7 @@ submit_evaluate_policy_patch
 | 用户在 preview 后说「评估 / 可以」就一口气执行 evaluate + update_policy | preview 后的确认仅授权 evaluate；evaluate 完成后必须展示结果并重新等落库确认 |
 | `validate_patch` 通过后问「确认写入」或「确认后 evaluate + update」 | 说「校验通过，接下来做回放评估」并执行 evaluate；**保存确认只在 evaluate 展示之后** |
 | evaluate 超时/失败，仅 preview 成功，仍问「继续写入吗」或 `update_policy` | 说明评估未完成；tool 已自动降级重试，仍失败时不得写入 |
-| evaluate 超时后向用户提议「跳过评估直接写入」或问「要不要先保存等会再试」 | evaluate 是 RSI 安全防线，不可跳过。tool 内置「超时自动减 case 重试一次」；两次都超时时如实告知用户服务繁忙、稍后重试。**零容忍跳过** |
+| evaluate 超时后向用户提议「跳过评估直接写入」或问「要不要先保存等会再试」 | evaluate 是 RSI 安全防线，不可跳过。tool 默认 2p+1r；超过 3 条首次前裁切；超时降为 1p+1r 重试一次；两次都超时时如实告知用户服务繁忙、稍后重试。**零容忍跳过** |
 | `ready_to_publish` / 评估全过，未展示评估摘要与对比就直接 `update_policy` 或说「已生效」 | 先展示 `evaluationSummaryMarkdown` + `format_policy_preview` → 等运营明确「确认写入」 |
 | 用户第二轮改需求（如「其他不要变」），跳过 evaluate 直接写入 | 新 patch → validate → evaluate → 展示 → 确认 → `update_policy` |
 | `publishBlocked === true` 仍 `update_policy`，或问「是否确认写入」 | 回 Propose → validate → evaluate，直至可发布 |

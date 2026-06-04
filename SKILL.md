@@ -40,7 +40,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 |------|------|--------------|------|
 | 校验 | `validate_patch` | **否** | `valid: true` 只表示 patch 合法 → **紧接着自动 preview** |
 | 预览 | `preview_policy_effect` | **是（进入评估的确认点）** | 先展示策略修改内容 + 新旧话术对比 → 引导用户选择「按这个做评估」还是「继续改策略」；**这不是落库确认**，只是决定是否进入评估 |
-| 评估 | `submit_evaluate_policy_patch` | **否** | 用户确认评估后执行；跑完必须展示 `evaluationSummaryMarkdown`；超时时 tool 自动减 case 重试一次，仍失败只能整体重试，不能跳过或提议跳过 |
+| 评估 | `submit_evaluate_policy_patch` | **否** | 用户确认评估后执行；默认 2p+1r；跑完必须展示 `evaluationSummaryMarkdown`；超 3 条会先裁切；超时再降为 1p+1r 重试一次，仍失败只能整体重试，不能跳过或提议跳过 |
 | **落库** | `update_policy` | **是（唯一写入确认点）** | 仅在本轮 evaluate 已展示且门禁允许后，问「是否确认保存/写入」；evaluate 与 update 之间须有独立用户消息确认 |
 
 **凡可能落库的改动：** 运营必须先看到**完整 evaluate 结果**与对比，再对 **update_policy** 明确拍板；编排层不得代填、不得抢跑。
@@ -95,7 +95,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
    → build_evaluate_cases(tenantId, basePolicyVersion, patch, recruiterUsername, cases)
    → submit_evaluate_policy_patch(tenantId, basePolicyVersion, patch, cases)
    → **读 JSON 的 orchestration**；向运营展示 evaluationSummaryMarkdown
-   → 超时时 tool 自动减 case 重试一次（warnings 会标注已精简样本）；两次都超时则报错，禁止跳过或向用户提议跳过
+   → 传入超过 3 条时 tool 首次请求前裁至 2p+1r；超时时再降为 1p+1r 重试（warnings 会说明）；两次都超时则报错，禁止跳过或向用户提议跳过
 
 8. 按 orchestration.action 决策（见下表）
    → **仅此处**可问运营是否确认**保存**（须已展示 evaluate 结果）
@@ -113,13 +113,13 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 ### 评估性能约束（必读）
 
-- **推荐 2-3 条 case（含 1 条自动补齐的 regression）**，覆盖本次 patch 最关键的修改场景即可
+- **默认 2 条 primary + 1 条 regression（共 3 条）**，覆盖本次 patch 最关键的 2 个场景 + 1 条回归即可
 - 每条 case 后端需 base + draft 双路 LLM 推理 + Judge 评分，case 越多越容易触发超时
-- **schema 硬限制上限为 5 条**，超过报错
-- **超时自动降级重试（tool 内置）**：首次评估超时时，tool 会自动减少到最多 2 条最关键用例（优先保留 primary）重试一次；
-  - 重试成功 → 结果的 warnings 里会带"已自动精简样本"提示，需向运营说明结论基于精简样本
+- **schema 硬限制上限为 5 条**；若 Agent 传入超过 3 条，`submit_evaluate_policy_patch` **首次请求前**会自动裁至 2p+1r（warnings 会说明）
+- **超时自动降级重试（tool 内置）**：首次评估超时时，降为 **1 条 primary + 1 条 regression** 重试一次；
+  - 重试成功 → warnings 会标注已精简样本，需向运营说明结论基于精简样本
   - 重试仍超时 → tool 报错，向运营说明服务繁忙、稍后重试，**不得**跳过评估直接写入
-- 选择 primary case 时：取最能覆盖本次 patch 修改场景的 2-3 条，不需要穷举所有场景
+- 选择 primary 时：取最能覆盖本次 patch 的 **2 条**即可；仅当 patch 跨多个独立场景且用户接受更长耗时时才考虑第 3 条 primary
 
 ### 机器可读：`submit_evaluate_policy_patch` 返回
 
@@ -283,7 +283,7 @@ roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 | `validate_patch` | 校验 patch，diff + warnings |
 | `resolve_recruiter_binding` | 解析 BOSS 招聘账号绑定。传 recruiterUsername（不传 tenantId）→ 接口返回该账号对应的 tenantId；也可传 tenantId 做绑定校验。**内置权限校验**：自动检查当前 token 是否有返回的 tenantId 的管理权限，无权限时抛出口语化错误 |
 | `build_evaluate_cases` | 用 recruiterUsername + cases 拼装完整的 evaluate 请求体 |
-| `submit_evaluate_policy_patch` | 双路回放 + Judge；**返回 `orchestration`**；**写入 evaluate 门禁记录**；judge 固定 enabled=true；**超时自动减 case 重试一次**，仍失败不能跳过 |
+| `submit_evaluate_policy_patch` | 双路回放 + Judge；默认 2p+1r；**超过 3 条首次前裁切**；**超时降为 1p+1r 重试一次**；**返回 `orchestration`**；**写入 evaluate 门禁记录**；仍失败不能跳过 |
 | `preview_policy_effect` | 单次话术预览 |
 | `format_policy_preview` | 汇总 Markdown（展示用，非分支依据） |
 | `update_policy` | 局部写入；**须过 evaluate 门禁**；高危 patch 可能 `confirm`；evaluate 超时/失败时禁止调用 |

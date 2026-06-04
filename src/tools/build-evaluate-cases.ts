@@ -20,7 +20,7 @@ const BuildEvaluateCasesInputSchema = z.object({
     .array(CaseInputSchema)
     .min(1)
     .max(5)
-    .describe("评估用例（至少 1 个 primary；推荐 2-3 条 primary + 自动补 1 条 regression；总数不超过 5 条避免超时）"),
+    .describe("评估用例（至少 1 个 primary；默认 2 条 primary + 1 条 regression；未提供 regression 时自动补 1 条；总数不超过 5 条，超过 3 条时 submit 会裁切）"),
 });
 
 const BuildEvaluateCasesOutputSchema = z.object({
