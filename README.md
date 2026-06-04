@@ -125,7 +125,7 @@ get_policy → validate_patch → preview_policy_effect
 | `REPLY_AUTHORITY_URL` | 是 | RAS 基础地址 |
 | `REPLY_AUTHORITY_BEARER_TOKEN` | 是 | Bearer Token |
 | `REPLY_AUTHORITY_TIMEOUT_MS` | 否 | 一般请求超时，默认 `30000` ms；示例中为 `120000` |
-| `REPLY_AUTHORITY_EVALUATE_TIMEOUT_MS` | 否 | 默认 `90000` ms |
+| `REPLY_AUTHORITY_EVALUATE_TIMEOUT_MS` | 否 | 默认 `60000` ms |
 | `REPLY_POLICY_TUNER_POLICY_JSON` | 否 | Tool 策略、`approvalTtlMs`、`evaluateGateTtlMs` |
 | `REPLY_POLICY_TUNER_EVALUATE_GATE_DIR` | 否 | 门禁存储目录（默认 `~/.roll-agent/...`） |
 | `REPLY_POLICY_TUNER_APPROVAL_DIR` | 否 | `needs_confirmation` 批准目录 |

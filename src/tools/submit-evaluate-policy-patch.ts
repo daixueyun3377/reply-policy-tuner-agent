@@ -42,6 +42,12 @@ const SubmitEvaluatePolicyPatchOutputSchema = z.object({
 
 type BuiltCase = z.infer<typeof BuiltCaseSchema>;
 
+type EvaluateAttemptLabel = "first" | "retry";
+
+function evaluateTimerLabel(attempt: EvaluateAttemptLabel): string {
+  return `submit_evaluate_policy_patch:evaluate:${attempt}`;
+}
+
 export const submitEvaluatePolicyPatchTool = defineTool({
   name: "submit_evaluate_policy_patch",
   description:
@@ -55,24 +61,30 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       input.cases,
     );
 
-    const callEvaluate = (cases: BuiltCase[]) =>
-      evaluatePolicyPatch(input.tenantId, {
-        basePolicyVersion: input.basePolicyVersion,
-        patch: input.patch,
-        cases: cases.map((c) => ({
-          caseId: c.caseId,
-          role: c.role,
-          ...(c.tags !== undefined ? { tags: c.tags } : {}),
-          input: {
-            candidateMessage: c.input.candidateMessage,
-            ...(c.input.conversationHistory !== undefined
-              ? { conversationHistory: c.input.conversationHistory }
-              : {}),
-            target: c.input.target,
-          },
-        })),
-        judge: { enabled: true },
-      });
+    const callEvaluate = async (cases: BuiltCase[], attempt: EvaluateAttemptLabel) => {
+      console.time(evaluateTimerLabel(attempt));
+      try {
+        return await evaluatePolicyPatch(input.tenantId, {
+          basePolicyVersion: input.basePolicyVersion,
+          patch: input.patch,
+          cases: cases.map((c) => ({
+            caseId: c.caseId,
+            role: c.role,
+            ...(c.tags !== undefined ? { tags: c.tags } : {}),
+            input: {
+              candidateMessage: c.input.candidateMessage,
+              ...(c.input.conversationHistory !== undefined
+                ? { conversationHistory: c.input.conversationHistory }
+                : {}),
+              target: c.input.target,
+            },
+          })),
+          judge: { enabled: true },
+        });
+      } finally {
+        console.timeEnd(evaluateTimerLabel(attempt));
+      }
+    };
 
     let result;
     let usedCases = firstAttemptCases;
@@ -81,7 +93,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       : [];
 
     try {
-      result = await callEvaluate(firstAttemptCases);
+      result = await callEvaluate(firstAttemptCases, "first");
     } catch (error) {
       if (!isReplyAuthorityTimeout(error)) {
         throw error;
@@ -99,7 +111,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       );
 
       try {
-        result = await callEvaluate(degraded);
+        result = await callEvaluate(degraded, "retry");
         usedCases = degraded;
       } catch (retryError) {
         if (isReplyAuthorityTimeout(retryError)) {

@@ -49,7 +49,7 @@ const FormatPolicyPreviewOutputSchema = z.object({
 export const formatPolicyPreviewTool = defineTool({
   name: "format_policy_preview",
   description:
-    "将 validate/preview/evaluate 结果格式化为运营可读的「策略对比 + 话术对比 + 评估摘要」Markdown。注意：展示预览结果后必须继续执行 submit_evaluate_policy_patch（安全评估），不得在预览后问用户确认写入。只有评估通过并展示后才可问确认保存",
+    "将 validate/preview/evaluate 结果格式化为运营可读的「策略对比 + 话术对比 + 评估摘要」Markdown。注意：展示预览结果后必须停顿等用户确认，引导用户选择「按这个做评估」还是「继续改策略」，禁止自动继续 submit_evaluate_policy_patch。用户确认评估后才执行安全评估；这一步的确认不是落库确认，不得在预览后问用户确认写入。只有评估通过并展示后才可问确认保存",
   input: FormatPolicyPreviewInputSchema,
   output: FormatPolicyPreviewOutputSchema,
   execute: async (input) => {

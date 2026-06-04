@@ -68,7 +68,7 @@ export function isReplyAuthorityTimeout(error: unknown): boolean {
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 /** evaluate 接口涉及双路回放 + 可选 Judge，需要更长超时 */
-const DEFAULT_EVALUATE_TIMEOUT_MS = 90_000;
+const DEFAULT_EVALUATE_TIMEOUT_MS = 60_000;
 
 function resolveEvaluateTimeoutMs(configuredTimeoutMs: number | undefined): number {
   const envRaw = process.env["REPLY_AUTHORITY_EVALUATE_TIMEOUT_MS"]?.trim();

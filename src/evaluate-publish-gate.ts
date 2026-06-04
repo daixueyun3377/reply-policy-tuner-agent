@@ -70,9 +70,10 @@ export async function recordEvaluatePublishGate(
   const filePath = gateFilePath(key);
   await writeFile(filePath, `${JSON.stringify(input)}\n`, "utf8");
 
-  // 概率性清理过期 evaluate gate 文件（排除刚写入的文件）
+  // 概率性清理过期 evaluate gate 文件（排除刚写入的文件）。
+  // 清理不影响门禁正确性，fire-and-forget 以免阻塞调用方响应。
   const ttlMs = getTunerPolicy().evaluateGateTtlMs;
-  await pruneExpiredFiles({
+  void pruneExpiredFiles({
     dir,
     timestampField: "evaluatedAtMs",
     maxAgeMs: ttlMs,
