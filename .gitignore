@@ -9,3 +9,6 @@ coverage/
 .tmp/
 tmp-*
 .docs/
+
+# 本地基准/调试脚本（含真实业务话术，不公开）
+scripts/benchmark-submit-evaluate.mjs

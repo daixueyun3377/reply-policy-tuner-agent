@@ -50,7 +50,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 ```text
 0. 判断用户是否提供了运营人员姓名（recruiterUsername）
 
-路径 A：用户说了具体人名（如"查看代雪韵的策略"）
+路径 A：用户说了具体人名（如"查看张三的策略"）
    → 调用 resolve_recruiter_binding，参数 { platform: "zhipin", username: "<人名>" }（无须传 tenantId）
    → 接口返回该账号对应的 tenantId
    → tool 内部再调 auth/context，校验返回的 tenantId 是否在当前 token 的 tenantIds 里：
@@ -127,7 +127,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 ```json
 {
-  "tenantId": "chengdu-liujie",
+  "tenantId": "demo-tenant-a",
   "summary": {
     "recommendedForPublish": false
   },
@@ -250,7 +250,7 @@ tool 失败返回结构化错误（`StructuredToolError`）：
 ```bash
 roll run reply-policy-tuner-agent diagnostic_status --json
 roll run reply-policy-tuner-agent get_policy \
-  --input-json '{"tenantId":"chengdu-liujie"}' --json
+  --input-json '{"tenantId":"demo-tenant-a"}' --json
 roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 ```
 

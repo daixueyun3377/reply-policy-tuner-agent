@@ -71,7 +71,7 @@ roll agent install @roll-agent/reply-policy-tuner-agent
 agents:
   env:
     reply-policy-tuner-agent:
-      REPLY_AUTHORITY_URL: https://reply-authority.duliday.com
+      REPLY_AUTHORITY_URL: https://reply-authority.example.com
       REPLY_AUTHORITY_BEARER_TOKEN: 你的Token
       REPLY_AUTHORITY_TIMEOUT_MS: "120000"
 ```

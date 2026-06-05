@@ -161,8 +161,8 @@ submit_evaluate_policy_patch
    zhipin_get_username({ browserInstance })
 
 4. 汇总选择列表，交给修改人确认：
-   boss-a → 郭晓阳
-   boss-b → 任思文
+   boss-a → 张三
+   boss-b → 李四
    boss-c → 读取失败（未登录或未打开 BOSS）
 
 5. 用户选定 tenantId + recruiterUsername 后，本轮迭代固定传递：
@@ -216,12 +216,12 @@ submit_evaluate_policy_patch
 ```text
 请选择要用于预览/评估的 BOSS 招聘账号：
 
-1. boss-a — 郭晓阳
-2. boss-b — 任思文
+1. boss-a — 张三
+2. boss-b — 李四
 3. boss-c — 读取失败（未登录或未打开 BOSS）
 
 同时为哪位运营人员修改策略？（Admin 场景）
-- chengdu-liujie
+- demo-tenant-a
 - ...
 ```
 
@@ -235,8 +235,8 @@ submit_evaluate_policy_patch
 ### 选定后的 tuner 调用示例
 
 ```bash
-RECRUITER="郭晓阳"
-TENANT="chengdu-liujie"
+RECRUITER="张三"
+TENANT="demo-tenant-a"
 VER=$(roll run reply-policy-tuner-agent get_policy --tenant-id=$TENANT --json | jq -r '.policyVersion')
 
 roll run reply-policy-tuner-agent preview_policy_effect \
@@ -270,7 +270,7 @@ roll run reply-policy-tuner-agent submit_evaluate_policy_patch \
     "details": {
       "reason": "tool_policy_confirm",
       "tool": "reset_policy",
-      "target": "chengdu-liujie",
+      "target": "demo-tenant-a",
       "summary": "重置策略：清除全部自定义，回退系统默认",
       "approvalRequest": {
         "id": "<uuid>",

@@ -17,7 +17,7 @@ export interface RecruiterBindingResult {
   username: string;
 }
 
-const DEFAULT_RECRUITER_CANDIDATES = ["任思文"] as const;
+const DEFAULT_RECRUITER_CANDIDATES = ["张三"] as const;
 
 function configuredRecruiterUsername(): string | undefined {
   const value = process.env["REPLY_POLICY_TUNER_PREVIEW_RECRUITER_USERNAME"]?.trim();

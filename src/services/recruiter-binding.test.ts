@@ -78,16 +78,16 @@ describe("recruiter binding cache", () => {
 
   it("caches a successful resolution and reuses it without another round-trip", async () => {
     const { calls } = stubFetch((username) =>
-      username === "代雪韵" ? { tenantId: "chengdu-daixueyun" } : undefined,
+      username === "张三" ? { tenantId: "demo-tenant-a" } : undefined,
     );
 
-    const first = await resolveRecruiterUsername(undefined, "代雪韵");
+    const first = await resolveRecruiterUsername(undefined, "张三");
     assert.equal(first.ok, true);
-    assert.deepEqual(first.data, { tenantId: "chengdu-daixueyun", username: "代雪韵" });
+    assert.deepEqual(first.data, { tenantId: "demo-tenant-a", username: "张三" });
     assert.equal(calls.length, 1);
 
     // 第二次相同 tenantId+username：命中缓存，不再发请求
-    const second = await resolveRecruiterUsername(undefined, "代雪韵");
+    const second = await resolveRecruiterUsername(undefined, "张三");
     assert.equal(second.ok, true);
     assert.deepEqual(second.data, first.data);
     assert.equal(calls.length, 1, "应命中缓存，不应产生第二次网络往返");
@@ -95,21 +95,21 @@ describe("recruiter binding cache", () => {
 
   it("reuses the resolution across explicit tenantId validation calls", async () => {
     const { calls } = stubFetch((username) =>
-      username === "代雪韵" ? { tenantId: "chengdu-daixueyun" } : undefined,
+      username === "张三" ? { tenantId: "demo-tenant-a" } : undefined,
     );
 
     // 模拟 resolve_recruiter_binding（auto-resolve）后 preview 带 tenantId 复用
-    const resolved = await resolveRecruiterUsername(undefined, "代雪韵");
+    const resolved = await resolveRecruiterUsername(undefined, "张三");
     assert.equal(resolved.ok, true);
     assert.equal(calls.length, 1);
 
-    const previewBinding = await resolveRecruiterUsername("chengdu-daixueyun", "代雪韵");
+    const previewBinding = await resolveRecruiterUsername("demo-tenant-a", "张三");
     assert.equal(previewBinding.ok, true);
-    assert.deepEqual(previewBinding.data, { tenantId: "chengdu-daixueyun", username: "代雪韵" });
+    assert.deepEqual(previewBinding.data, { tenantId: "demo-tenant-a", username: "张三" });
     // tenantId 维度是独立 key（一次校验往返），但同一 key 的二次调用才命中缓存
     assert.equal(calls.length, 2);
 
-    const previewAgain = await resolveRecruiterUsername("chengdu-daixueyun", "代雪韵");
+    const previewAgain = await resolveRecruiterUsername("demo-tenant-a", "张三");
     assert.equal(previewAgain.ok, true);
     assert.equal(calls.length, 2, "同一 tenantId+username 第二次应命中缓存");
   });
@@ -117,12 +117,12 @@ describe("recruiter binding cache", () => {
   it("does not cache failures", async () => {
     const { calls } = stubFetch(() => undefined); // 始终 404
 
-    const first = await resolveRecruiterUsername("chengdu-daixueyun", "查无此人");
+    const first = await resolveRecruiterUsername("demo-tenant-a", "查无此人");
     assert.equal(first.ok, false);
     const callsAfterFirst = calls.length;
     assert.ok(callsAfterFirst >= 1);
 
-    const second = await resolveRecruiterUsername("chengdu-daixueyun", "查无此人");
+    const second = await resolveRecruiterUsername("demo-tenant-a", "查无此人");
     assert.equal(second.ok, false);
     assert.ok(
       calls.length > callsAfterFirst,
@@ -133,26 +133,26 @@ describe("recruiter binding cache", () => {
   it("skips caching entirely when TTL is zero", async () => {
     resetRecruiterBindingCacheForTests(0);
     const { calls } = stubFetch((username) =>
-      username === "代雪韵" ? { tenantId: "chengdu-daixueyun" } : undefined,
+      username === "张三" ? { tenantId: "demo-tenant-a" } : undefined,
     );
 
-    await resolveRecruiterUsername(undefined, "代雪韵");
-    await resolveRecruiterUsername(undefined, "代雪韵");
+    await resolveRecruiterUsername(undefined, "张三");
+    await resolveRecruiterUsername(undefined, "张三");
     assert.equal(calls.length, 2, "TTL=0 时应禁用缓存，每次都重新解析");
   });
 
   it("expires cached entries after the TTL window", async () => {
     resetRecruiterBindingCacheForTests(1); // 1ms TTL
     const { calls } = stubFetch((username) =>
-      username === "代雪韵" ? { tenantId: "chengdu-daixueyun" } : undefined,
+      username === "张三" ? { tenantId: "demo-tenant-a" } : undefined,
     );
 
-    await resolveRecruiterUsername(undefined, "代雪韵");
+    await resolveRecruiterUsername(undefined, "张三");
     assert.equal(calls.length, 1);
 
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    await resolveRecruiterUsername(undefined, "代雪韵");
+    await resolveRecruiterUsername(undefined, "张三");
     assert.equal(calls.length, 2, "过期后应重新解析");
   });
 });
