@@ -6,10 +6,10 @@ import {
   pickEvaluateCases,
 } from "./evaluate-case-selection.ts";
 
-type Case = { caseId: string; role: "primary" | "regression" };
+type Case = { caseId: string; role: "primary" | "regression"; tags?: string[] };
 
-function caseOf(caseId: string, role: Case["role"]): Case {
-  return { caseId, role };
+function caseOf(caseId: string, role: Case["role"], tags?: string[]): Case {
+  return { caseId, role, ...(tags !== undefined ? { tags } : {}) };
 }
 
 describe("pickEvaluateCases", () => {
@@ -19,11 +19,30 @@ describe("pickEvaluateCases", () => {
       caseOf("p2", "primary"),
       caseOf("p3", "primary"),
       caseOf("r1", "regression"),
+      caseOf("r2", "regression"),
+      caseOf("r3", "regression"),
+      caseOf("r4", "regression"),
     ];
     const picked = pickEvaluateCases(input, { maxTotal: 3, maxPrimary: 2, maxRegression: 1 });
     assert.deepEqual(
       picked.map((c) => c.caseId),
       ["p1", "p2", "r1"],
+    );
+  });
+
+  it("prioritizes safety regression when only one regression is kept", () => {
+    const input = [
+      caseOf("p1", "primary"),
+      caseOf("p2", "primary"),
+      caseOf("r-user", "regression"),
+      caseOf("r-location", "regression", ["regression", "system", "safety", "location"]),
+      caseOf("r-salary", "regression", ["regression", "system", "safety", "compensation"]),
+      caseOf("r-greeting", "regression", ["regression", "system", "greeting"]),
+    ];
+    const picked = pickEvaluateCases(input, { maxTotal: 3, maxPrimary: 2, maxRegression: 1 });
+    assert.deepEqual(
+      picked.map((c) => c.caseId),
+      ["p1", "p2", "r-location"],
     );
   });
 });

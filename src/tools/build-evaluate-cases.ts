@@ -1,5 +1,6 @@
 import { defineTool } from "@roll-agent/sdk";
 import { z } from "zod";
+import { appendSystemRegressionCases } from "../evaluate-regression-cases.ts";
 import { buildEvaluateTargetInput } from "../services/reply-authority-client.ts";
 import { BuiltCaseSchema } from "../types/reply-policy.ts";
 
@@ -20,7 +21,7 @@ const BuildEvaluateCasesInputSchema = z.object({
     .array(CaseInputSchema)
     .min(1)
     .max(5)
-    .describe("评估用例（至少 1 个 primary；默认 2 条 primary + 1 条 regression；未提供 regression 时自动补 1 条；总数不超过 5 条，超过 3 条时 submit 会裁切）"),
+    .describe("评估用例（至少 1 个 primary；系统会自动补 1 条事实边界 smoke regression；总数不超过 5 条，submit 会按 2p+1r 裁切）"),
 });
 
 const BuildEvaluateCasesOutputSchema = z.object({
@@ -30,43 +31,16 @@ const BuildEvaluateCasesOutputSchema = z.object({
   cases: z.array(BuiltCaseSchema),
 });
 
-const DEFAULT_REGRESSION_CASE = {
-  caseId: "regression-greeting-001",
-  role: "regression" as const,
-  candidateMessage: "你好，想了解一下这个岗位",
-  tags: ["regression", "greeting"],
-};
-
-function ensureRegressionCase(
-  cases: z.infer<typeof CaseInputSchema>[],
-): z.infer<typeof CaseInputSchema>[] {
-  const hasPrimary = cases.some((item) => item.role === "primary");
-  if (!hasPrimary) {
-    throw new Error("evaluate_policy_patch 至少需要 1 个 primary 用例");
-  }
-
-  const hasRegression = cases.some((item) => item.role === "regression");
-  if (hasRegression) {
-    return cases;
-  }
-
-  if (cases.length >= 5) {
-    throw new Error("evaluate_policy_patch 需要至少 1 个 regression 用例，但 cases 已达上限 5 条");
-  }
-
-  return [...cases, DEFAULT_REGRESSION_CASE];
-}
-
 export const buildEvaluateCasesTool = defineTool({
   name: "build_evaluate_cases",
   description:
-    "根据 recruiterUsername 和用例列表，拼装完整的 evaluate 请求 cases（含 target 结构）。自动补齐 regression 样本。输出可直接传给 submit_evaluate_policy_patch。",
+    "根据 recruiterUsername 和用例列表，拼装完整的 evaluate 请求 cases（含 target 结构）。自动补齐系统事实边界 smoke regression。输出可直接传给 submit_evaluate_policy_patch。",
   input: BuildEvaluateCasesInputSchema,
   output: BuildEvaluateCasesOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Building evaluate cases for tenant: ${input.tenantId}`);
 
-    const cases = ensureRegressionCase(input.cases);
+    const cases = appendSystemRegressionCases(input.cases);
 
     const builtCases = cases.map((item) => ({
       caseId: item.caseId,

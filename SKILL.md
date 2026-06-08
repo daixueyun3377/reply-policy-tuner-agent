@@ -113,7 +113,7 @@ npm 包名：`@roll-agent/reply-policy-tuner-agent`
 
 ### 评估性能约束（必读）
 
-- **默认 2 条 primary + 1 条 regression（共 3 条）**，覆盖本次 patch 最关键的 2 个场景 + 1 条回归即可
+- **默认 2 条 primary + 1 条 regression（共 3 条）**，覆盖本次 patch 最关键的 2 个场景 + 1 条系统事实边界 smoke 回归
 - 每条 case 后端需 base + draft 双路 LLM 推理 + Judge 评分，case 越多越容易触发超时
 - **schema 硬限制上限为 5 条**；若 Agent 传入超过 3 条，`submit_evaluate_policy_patch` **首次请求前**会自动裁至 2p+1r（warnings 会说明）
 - **超时自动降级重试（tool 内置）**：首次评估超时时，降为 **1 条 primary + 1 条 regression** 重试一次；

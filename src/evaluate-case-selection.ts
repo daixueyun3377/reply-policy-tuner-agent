@@ -9,6 +9,7 @@ export type EvaluateCaseRole = "primary" | "regression";
 export type EvaluateCasePickable = {
   readonly caseId: string;
   readonly role: EvaluateCaseRole;
+  readonly tags?: readonly string[] | undefined;
 };
 
 type PickLimits = {
@@ -18,15 +19,31 @@ type PickLimits = {
 };
 
 /**
- * 按 primary 在前、regression 在后的顺序选取用例（保留输入顺序内的前 N 条）。
+ * 按 primary 在前、regression 在后的顺序选取用例；regression 优先保留系统安全样本。
  */
 export function pickEvaluateCases<T extends EvaluateCasePickable>(
   cases: readonly T[],
   limits: PickLimits,
 ): T[] {
   const primary = cases.filter((c) => c.role === "primary").slice(0, limits.maxPrimary);
-  const regression = cases.filter((c) => c.role === "regression").slice(0, limits.maxRegression);
+  const regression = cases
+    .filter((c) => c.role === "regression")
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => regressionPriority(a.item) - regressionPriority(b.item) || a.index - b.index)
+    .slice(0, limits.maxRegression)
+    .map(({ item }) => item);
   return [...primary, ...regression].slice(0, limits.maxTotal);
+}
+
+function regressionPriority(item: EvaluateCasePickable): number {
+  const tags = item.tags ?? [];
+  if (tags.includes("safety") || tags.includes("fact") || tags.includes("location")) {
+    return 0;
+  }
+  if (tags.includes("system")) {
+    return 1;
+  }
+  return 2;
 }
 
 /** C1：首次请求前封顶，避免先跑满量再超时（默认 2p+1r） */
