@@ -1,6 +1,6 @@
 {
   "name": "@roll-agent/reply-policy-tuner-agent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "策略 RSI 编排 Agent（Reply Policy Tuner）",
   "repository": {
