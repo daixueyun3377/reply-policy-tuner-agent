@@ -26,6 +26,10 @@ export type EvaluationOrchestration = {
   guidance: string;
 };
 
+export type EvaluationOrchestrationOptions = {
+  readonly advisoryCaseIds?: readonly string[];
+};
+
 export const EvaluationOrchestrationSchema = z.object({
   action: z.enum(EVALUATION_ORCHESTRATION_ACTIONS),
   publishBlocked: z.boolean(),
@@ -35,10 +39,30 @@ export const EvaluationOrchestrationSchema = z.object({
   guidance: z.string(),
 });
 
-function hasDraftBlockingFactIssues(data: EvaluatePatchResponse): boolean {
+function buildAdvisoryCaseIdSet(options: EvaluationOrchestrationOptions | undefined): Set<string> {
+  return new Set(options?.advisoryCaseIds ?? []);
+}
+
+function isAdvisoryCase(caseId: string, advisoryCaseIds: ReadonlySet<string>): boolean {
+  return advisoryCaseIds.has(caseId);
+}
+
+function caseHasDraftBlockingFactIssues(item: EvaluatePatchResponse["cases"][number]): boolean {
+  const blocking = item.factVerification?.draft.blockingIssues ?? [];
+  return blocking.length > 0;
+}
+
+function hasDraftBlockingFactIssues(
+  data: EvaluatePatchResponse,
+  input?: { readonly advisoryCaseIds?: ReadonlySet<string>; readonly includeAdvisory?: boolean },
+): boolean {
+  const advisoryCaseIds = input?.advisoryCaseIds ?? new Set<string>();
+  const includeAdvisory = input?.includeAdvisory ?? true;
   for (const item of data.cases) {
-    const blocking = item.factVerification?.draft.blockingIssues ?? [];
-    if (blocking.length > 0) {
+    if (!includeAdvisory && isAdvisoryCase(item.caseId, advisoryCaseIds)) {
+      continue;
+    }
+    if (caseHasDraftBlockingFactIssues(item)) {
       return true;
     }
   }
@@ -51,17 +75,44 @@ const PUBLISH_BLOCKED_ORCHESTRATION_SUFFIX =
   "勿以删除 factGate.forbiddenWhenMissingFacts、放宽 factGate.mode 等方式规避 Fact 阻塞；" +
   "证据不符（如 contradicted_location）须改 Reply Authority 门店证据或修订 patch 后重新 Validate → Evaluate。";
 
-function hasDraftGateViolations(data: EvaluatePatchResponse): boolean {
+function caseHasDraftGateViolations(item: EvaluatePatchResponse["cases"][number]): boolean {
+  const violations = item.draft.gateViolations ?? [];
+  return violations.length > 0 || item.comparison?.draftIntroducedGateViolations === true;
+}
+
+function hasDraftGateViolations(
+  data: EvaluatePatchResponse,
+  input?: { readonly advisoryCaseIds?: ReadonlySet<string>; readonly includeAdvisory?: boolean },
+): boolean {
+  const advisoryCaseIds = input?.advisoryCaseIds ?? new Set<string>();
+  const includeAdvisory = input?.includeAdvisory ?? true;
   for (const item of data.cases) {
-    const violations = item.draft.gateViolations ?? [];
-    if (violations.length > 0) {
-      return true;
+    if (!includeAdvisory && isAdvisoryCase(item.caseId, advisoryCaseIds)) {
+      continue;
     }
-    if (item.comparison?.draftIntroducedGateViolations === true) {
+    if (caseHasDraftGateViolations(item)) {
       return true;
     }
   }
   return false;
+}
+
+function hasAdvisoryDraftBlockingFactIssues(
+  data: EvaluatePatchResponse,
+  advisoryCaseIds: ReadonlySet<string>,
+): boolean {
+  return data.cases.some(
+    (item) => isAdvisoryCase(item.caseId, advisoryCaseIds) && caseHasDraftBlockingFactIssues(item),
+  );
+}
+
+function hasAdvisoryDraftGateViolations(
+  data: EvaluatePatchResponse,
+  advisoryCaseIds: ReadonlySet<string>,
+): boolean {
+  return data.cases.some(
+    (item) => isAdvisoryCase(item.caseId, advisoryCaseIds) && caseHasDraftGateViolations(item),
+  );
 }
 
 /**
@@ -72,23 +123,50 @@ function hasDraftGateViolations(data: EvaluatePatchResponse): boolean {
  */
 export function deriveEvaluationOrchestration(
   data: EvaluatePatchResponse,
+  options?: EvaluationOrchestrationOptions,
 ): EvaluationOrchestration {
   const { summary } = data;
+  const advisoryCaseIds = buildAdvisoryCaseIdSet(options);
+  const hasNonAdvisoryFactBlocking = hasDraftBlockingFactIssues(data, {
+    advisoryCaseIds,
+    includeAdvisory: false,
+  });
+  const hasNonAdvisoryGateViolations = hasDraftGateViolations(data, {
+    advisoryCaseIds,
+    includeAdvisory: false,
+  });
+  const hasAdvisoryFactBlocking = hasAdvisoryDraftBlockingFactIssues(data, advisoryCaseIds);
+  const hasAdvisoryGateViolations = hasAdvisoryDraftGateViolations(data, advisoryCaseIds);
+  const factFailureIsAdvisoryOnly =
+    !summary.factRecommendedForPublish && hasAdvisoryFactBlocking && !hasNonAdvisoryFactBlocking;
+  const hardFailureIsAdvisoryOnly =
+    !summary.hardRecommendedForPublish &&
+    hasAdvisoryGateViolations &&
+    !hasNonAdvisoryGateViolations;
+  const effectiveFactRecommendedForPublish =
+    summary.factRecommendedForPublish || factFailureIsAdvisoryOnly;
+  const effectiveHardRecommendedForPublish =
+    summary.hardRecommendedForPublish || hardFailureIsAdvisoryOnly;
   const mandatoryPublishReady =
-    summary.hardRecommendedForPublish &&
-    summary.factRecommendedForPublish &&
-    !hasDraftBlockingFactIssues(data);
+    effectiveHardRecommendedForPublish &&
+    effectiveFactRecommendedForPublish &&
+    !hasNonAdvisoryFactBlocking;
 
   const publishBlocked =
     !mandatoryPublishReady ||
-    hasDraftGateViolations(data) ||
-    !summary.hardRecommendedForPublish ||
-    !summary.factRecommendedForPublish;
+    hasNonAdvisoryGateViolations ||
+    !effectiveHardRecommendedForPublish ||
+    !effectiveFactRecommendedForPublish;
 
   const judgeAdvisoryOnly =
     mandatoryPublishReady &&
     !publishBlocked &&
     !summary.judgeRecommendedForPublish;
+
+  const advisoryRegressionWarningOnly =
+    mandatoryPublishReady &&
+    !publishBlocked &&
+    (factFailureIsAdvisoryOnly || hardFailureIsAdvisoryOnly);
 
   let action: EvaluationOrchestrationAction;
   let guidance: string;
@@ -96,13 +174,17 @@ export function deriveEvaluationOrchestration(
   if (publishBlocked) {
     action = "rollback_to_propose";
     const reasons: string[] = [];
-    if (!summary.hardRecommendedForPublish || hasDraftGateViolations(data)) {
+    if (!effectiveHardRecommendedForPublish || hasNonAdvisoryGateViolations) {
       reasons.push("Hard Gate 未通过");
     }
-    if (!summary.factRecommendedForPublish || hasDraftBlockingFactIssues(data)) {
+    if (!effectiveFactRecommendedForPublish || hasNonAdvisoryFactBlocking) {
       reasons.push("Fact Verification 存在阻塞项");
     }
     guidance = `硬性安全校验未通过（${reasons.join("、")}），须回到 Propose 修订最小 patch 后重新 Validate → Evaluate。${PUBLISH_BLOCKED_ORCHESTRATION_SUFFIX}`;
+  } else if (advisoryRegressionWarningOnly) {
+    action = "decide_with_warnings";
+    guidance =
+      "系统自动回归样本发现弱相关风险，已降级为风险提示，不直接阻断保存。请向运营展示 warning、话术对比和修订方案；运营可选择修订后重新评估，或明确确认接受风险后继续保存。";
   } else if (judgeAdvisoryOnly) {
     action = "decide_with_warnings";
     guidance =

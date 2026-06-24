@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>模型自我优化平台 · 终极目标与落地路线</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d8dee8;
+      --green: #0f766e;
+      --blue: #2563eb;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --soft-green: #ecfdf5;
+      --soft-blue: #eff6ff;
+      --soft-amber: #fff7ed;
+      --soft-red: #fef2f2;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 54px; }
+
+    .hero, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 { margin: 0 0 14px; line-height: 1.3; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 24px; }
+    h3 { font-size: 18px; margin-top: 22px; }
+    p { margin: 8px 0; }
+
+    .lead { max-width: 900px; color: var(--muted); font-size: 17px; }
+
+    .north-star {
+      border-left: 4px solid var(--green);
+      background: var(--soft-green);
+      padding: 14px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 16px;
+      font-size: 16px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin: 24px 0 10px;
+    }
+
+    .step {
+      position: relative;
+      min-height: 170px;
+      padding: 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .step:not(:last-child)::after {
+      content: "\2192";
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .step-num {
+      display: inline-flex;
+      width: 26px; height: 26px;
+      align-items: center; justify-content: center;
+      border-radius: 50%;
+      background: var(--green);
+      color: white; font-weight: 700; font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .step-title { font-weight: 800; margin-bottom: 5px; }
+    .step-subtitle { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .step ul { padding-left: 18px; margin: 0; font-size: 13px; }
+
+    .loop-note {
+      border: 1px solid #bfdbfe;
+      background: var(--soft-blue);
+      color: #1e3a8a;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 16px;
+    }
+
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; color: #111827; }
+    tr.current td { background: var(--soft-green); font-weight: 600; }
+
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+    .card { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: #fbfcfe; }
+    .card strong { display: block; margin-bottom: 6px; }
+    .card p { color: var(--muted); font-size: 14px; }
+    .card .role { color: var(--blue); font-weight: 700; }
+
+    .invariants { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+    .invariant {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      padding: 14px 16px;
+      background: #fbfcfe;
+    }
+    .invariant b { color: var(--green); }
+
+    .callout {
+      border-left: 4px solid var(--green);
+      background: var(--soft-green);
+      padding: 12px 14px;
+      margin-top: 16px;
+      border-radius: 0 8px 8px 0;
+    }
+    .warning { border-left-color: var(--amber); background: var(--soft-amber); }
+    .danger { border-left-color: var(--red); background: var(--soft-red); }
+
+    .phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+    .phase { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: #fbfcfe; }
+    .phase .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; margin-bottom: 8px; }
+    .phase.now .tag { background: var(--green); color: #fff; }
+    .phase.next .tag { background: var(--blue); color: #fff; }
+    .phase.later .tag { background: var(--muted); color: #fff; }
+    .phase ul { padding-left: 18px; margin: 8px 0 0; font-size: 13px; }
+    .phase .gate { margin-top: 10px; font-size: 13px; color: var(--amber); }
+
+    code { background: #f1f5f9; border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; }
+
+    @media (max-width: 1040px) {
+      .flow { grid-template-columns: 1fr; }
+      .step:not(:last-child)::after { content: "\2193"; right: auto; left: 50%; top: auto; bottom: -18px; transform: translateX(-50%); }
+      .cards, .invariants, .phases { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="hero">
+      <p class="eyebrow">终极目标与落地路线</p>
+      <h1>模型自我优化平台</h1>
+      <p class="lead">让业务 Agent 在证据门禁下持续自我优化:早期人工评审每一次优化,后期随评估器被验证可信,逐步把"发布决策"自动化。核心安全前提是——优化循环永远无权修改自己的评判标准。</p>
+      <div class="north-star">
+        <strong>北极星(终极目标):</strong>
+        一个多 Agent 共享的持续自我优化平台。模型负责"发现问题 → 提出优化 → 验证 → 发布",人介入的程度随评估能力成熟而递减;但"评判标准"始终由独立、冻结、人治理的评估体系把控,优化循环绝不能改自己的考卷。
+      </div>
+    </div>
+
+    <section>
+      <h2>1. 通用主流程:持续自我优化闭环</h2>
+      <p>所有业务 Agent 共用同一条改进生命周期。差异在于每个 Agent 的样本、问题类型、候选优化、评估方式和发布门禁不同。</p>
+      <div class="flow">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-title">Observe(观察)</div>
+          <div class="step-subtitle">收集证据链</div>
+          <ul><li>用户反馈</li><li>模型输出</li><li>人工改写</li><li>评估结果</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-title">Diagnose(诊断)</div>
+          <div class="step-subtitle">发现和归因问题</div>
+          <ul><li>失败聚类</li><li>问题归因</li><li>影响面分析</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-title">Propose(提出候选)</div>
+          <div class="step-subtitle">生成 Candidate</div>
+          <ul><li>策略补丁</li><li>提示词补丁</li><li>回归样本</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-title">Evaluate(评估)</div>
+          <div class="step-subtitle">独立评估器验证</div>
+          <ul><li>确定性校验</li><li>独立判卷模型</li><li>回归对比</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-title">Decide(决策)</div>
+          <div class="step-subtitle">人工→规则,逐步自动</div>
+          <ul><li>接受</li><li>拒绝</li><li>修订</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">6</div>
+          <div class="step-title">Release(发布)</div>
+          <div class="step-subtitle">通过业务门禁上线</div>
+          <ul><li>策略写入</li><li>Prompt 更新</li><li>带审计+可回滚</li></ul>
+        </div>
+        <div class="step">
+          <div class="step-num">7</div>
+          <div class="step-title">Observe Again(再观察)</div>
+          <div class="step-subtitle">用真实结果验证</div>
+          <ul><li>灰度/holdout</li><li>正向收益</li><li>负向回归→回滚</li></ul>
+        </div>
+      </div>
+      <div class="loop-note">发布后效果回流到 Observe,形成下一轮优化。注意:Evaluate 与 Observe Again 才是闭环可信度的上限——评估器有多可信,才敢把决策自动化到什么程度。</div>
+    </section>
+
+    <section>
+      <h2>2. 三模型架构:干活 / 出题 / 判卷分离</h2>
+      <p>"模型自我优化"不靠同一个模型自评自改,而是把角色拆给不同模型,并让评判锚定在模型之外的客观信号上。</p>
+      <div class="cards">
+        <div class="card">
+          <span class="role">Worker(干活模型)</span>
+          <strong>在 Agent 上真实服务</strong>
+          <p>生成回复 / 策略候选 / SQL。它是被优化的对象,不参与给自己打分。</p>
+        </div>
+        <div class="card">
+          <span class="role">Examiner(出题模型)</span>
+          <strong>构造评估用例</strong>
+          <p>从真实生产失败中抽取并扩展测试集。合成题只能补充、不能替代真实流量。</p>
+        </div>
+        <div class="card">
+          <span class="role">Judge(判卷模型)</span>
+          <strong>独立评分</strong>
+          <p>最好与 Worker 不同家族,避免共享盲区。rubric 冻结,优化循环无权修改。</p>
+        </div>
+      </div>
+      <div class="callout warning">
+        <strong>分三个模型 ≠ 自动独立。</strong>
+        <p>若三者同源(同一基座),它们共享盲区,会一起犯同样的错——三道防线其实是同一道墙刷了三遍。真正的独立性由下一节的四条铁律保证。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 四条独立性铁律(不可侵犯)</h2>
+      <p>这是整个方案的安全主轴。少任何一条,自我优化就会退化成"考生自己改答案",且退化得更隐蔽。</p>
+      <div class="invariants">
+        <div class="invariant"><b>① 判卷与干活不同源</b><br>Judge 模型尽量与 Worker 不同家族/不同厂商,让两者盲区错开。</div>
+        <div class="invariant"><b>② 评判之上压着确定性校验</b><br>事实门禁、SQL 执行、schema/lint 是代码不是意见,模型改不动,优先级高于判卷模型。</div>
+        <div class="invariant"><b>③ 出题锚定真实流量</b><br>测试集持续从真实生产失败抽取,并保留人工维护的回归核心集,防止考卷脱离现实。</div>
+        <div class="invariant"><b>④ 判卷标准冻结且循环改不动</b><br>rubric / 判卷 prompt 冻结,只能由独立治理流程升级,优化循环无权修改。</div>
+      </div>
+      <div class="callout danger">
+        <strong>最终仲裁永远是线上真实结果。</strong>
+        <p>判卷模型再独立也只是"意见",可被哄、会漂移。holdout / 灰度回流的真实业务指标才是模型造不了假的终审。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 两个"测谎"指标(自动化后长期盯)</h2>
+      <p>一旦把决策交给自动化,用这两个指标监控评估器有没有在自欺。任一掉线,立即降自主度、回退人工评审。</p>
+      <table>
+        <thead><tr><th>指标</th><th>含义</th><th>掉线意味着</th></tr></thead>
+        <tbody>
+          <tr><td>判卷模型 vs 人工抽检 一致率</td><td>判卷意见和人类判断是否对齐</td><td>判卷在漂,标准失真</td></tr>
+          <tr><td>判卷分数 vs 线上真实指标 相关性</td><td>分数涨是否真的带来现实收益</td><td>在刷分不刷现实(reward hacking)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>5. 自主度阶梯</h2>
+      <p>自动化的是"发布决策",不是"评判标准"。评判标准这一列从头到尾都不在优化循环手里——这就是安全的关键。</p>
+      <table>
+        <thead><tr><th>等级</th><th>自动化的是什么</th><th>谁拍板发布</th><th>评判标准由谁控</th><th>前提</th></tr></thead>
+        <tbody>
+          <tr class="current"><td>L1(现状)</td><td>候选生成</td><td>人逐条评审</td><td>独立评估器 + 人</td><td>—</td></tr>
+          <tr><td>L2</td><td>候选 + 回归门禁</td><td>人批发布</td><td>独立评估器</td><td>评估器初步可信</td></tr>
+          <tr><td>L3</td><td>低风险改动自动发布 + 监控回滚</td><td>规则,人事后审</td><td>同一独立冻结评估器</td><td>测谎指标稳定 + 回滚机制</td></tr>
+          <tr><td>L4</td><td>高风险也自动</td><td>规则</td><td>独立评估器,rubric 由治理流程单独升级</td><td>长期验证 + 完善治理</td></tr>
+        </tbody>
+      </table>
+      <div class="loop-note">原则:评估器有多可信,就放多少权。评估信号弱的 Agent(如话术语气/转化)长期停在 L1–L2,不要用不可靠的尺子去自动放大改动。</div>
+    </section>
+
+    <section>
+      <h2>6. 三阶段路线图</h2>
+      <div class="phases">
+        <div class="phase now">
+          <span class="tag">Phase 1 · 现在</span>
+          <strong>reply-policy 单 Agent 闭环做扎实</strong>
+          <ul>
+            <li>确立 L1,跑通 L2</li>
+            <li>补迭代历史持久化</li>
+            <li>补发布后观察(灰度/holdout)</li>
+            <li>建立独立判卷 + 冻结 rubric</li>
+          </ul>
+          <div class="gate">Go/No-Go:闭环稳定产出可信改进,可审计、可回滚</div>
+        </div>
+        <div class="phase next">
+          <span class="tag">Phase 2 · 下一步</span>
+          <strong>复制到 wechat-reply</strong>
+          <ul>
+            <li>检验"统一生命周期"能否真复用</li>
+            <li>主攻话术评估器弱的问题</li>
+            <li>真实评估"通用化"假设</li>
+          </ul>
+          <div class="gate">Go/No-Go:第二个 Agent 评估器达标,复用收益被验证</div>
+        </div>
+        <div class="phase later">
+          <span class="tag">Phase 3 · 远期(有条件)</span>
+          <strong>提升自动化 / 接入更多 Agent</strong>
+          <ul>
+            <li>评估器成熟后推进 L3</li>
+            <li>nl2sql 等新 Agent 视情况接入</li>
+            <li>A2A 仅在多 Agent 成熟后再评估</li>
+          </ul>
+          <div class="gate">前置条件:测谎指标长期稳定 + 多个成熟 Agent</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 明确的边界(本期不做)</h2>
+      <table>
+        <thead><tr><th>不做</th><th>原因</th></tr></thead>
+        <tbody>
+          <tr><td>A2A(Agent 间互相学习)</td><td>只有 1.x 个成熟 Agent,跨域知识能否复用未经验证,现在投入是浪费。作为远期有条件选项。</td></tr>
+          <tr><td>优化循环修改自己的评判标准</td><td>等于考生自己改答案,直接摧毁可信度。rubric 变更走独立治理流程。</td></tr>
+          <tr><td>全自动发布(评估器不达标的 Agent)</td><td>用不可靠的评估自动放大改动,风险最大。</td></tr>
+          <tr><td>宣称"模型自我进化/越用越聪明"</td><td>名不副实且制造错误预期。我们做的是证据门禁下的受控持续优化。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>一句话总结。</strong>
+        <p>愿景是"模型自我优化、人越来越少介入";安全底座是"无论自动化到哪一级,评判标准始终独立、冻结、由人治理,优化循环永远改不动自己的考卷"。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

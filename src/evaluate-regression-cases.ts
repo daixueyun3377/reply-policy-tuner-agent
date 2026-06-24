@@ -3,10 +3,14 @@ export type EvaluationCaseInput = {
   readonly role: "primary" | "regression";
   readonly candidateMessage: string;
   readonly conversationHistory?: string[] | undefined;
+  readonly conversationId?: string | undefined;
+  readonly candidateId?: string | undefined;
   readonly tags?: string[] | undefined;
 };
 
 const MAX_EVALUATE_CASES = 5;
+export const SYSTEM_AUTO_REGRESSION_TAG = "system-auto-regression";
+export const ADVISORY_REGRESSION_TAG = "advisory";
 
 export const SYSTEM_REGRESSION_CASES: readonly EvaluationCaseInput[] = [
   {
@@ -23,13 +27,15 @@ export const SYSTEM_REGRESSION_CASES: readonly EvaluationCaseInput[] = [
       "compensation",
       "benefits",
       "qualification",
+      SYSTEM_AUTO_REGRESSION_TAG,
+      ADVISORY_REGRESSION_TAG,
     ],
   },
   {
     caseId: "regression-greeting-001",
     role: "regression",
     candidateMessage: "你好，想了解一下这个岗位",
-    tags: ["regression", "system", "greeting"],
+    tags: ["regression", "system", "greeting", SYSTEM_AUTO_REGRESSION_TAG, ADVISORY_REGRESSION_TAG],
   },
 ];
 

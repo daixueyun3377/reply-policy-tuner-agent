@@ -107,6 +107,55 @@ describe("deriveEvaluationOrchestration", () => {
     assert.match(orch.guidance, /patch 完全一致/);
   });
 
+  it("returns decide_with_warnings when only advisory regression fact blocking exists", () => {
+    const orch = deriveEvaluationOrchestration(
+      baseEvaluate({
+        summary: {
+          totalCases: 2,
+          primaryCases: 1,
+          regressionCases: 1,
+          draftFailures: 1,
+          regressionWarnings: 1,
+          hardRecommendedForPublish: true,
+          factRecommendedForPublish: false,
+          judgeRecommendedForPublish: true,
+          recommendedForPublish: false,
+        },
+        cases: [
+          {
+            caseId: "main-001",
+            role: "primary",
+            base: { suggestedReply: "A", stage: "trust" },
+            draft: { suggestedReply: "B", stage: "trust" },
+            factVerification: {
+              base: { blockingIssues: [], nonBlockingIssues: [] },
+              draft: { blockingIssues: [], nonBlockingIssues: [] },
+            },
+          },
+          {
+            caseId: "regression-fact-boundary-smoke-001",
+            role: "regression",
+            base: { suggestedReply: "A", stage: "trust" },
+            draft: { suggestedReply: "B", stage: "trust" },
+            factVerification: {
+              base: { blockingIssues: [], nonBlockingIssues: [] },
+              draft: {
+                blockingIssues: [{ code: "missing_location_fact", claim: "在徐汇上班" }],
+                nonBlockingIssues: [],
+              },
+            },
+          },
+        ],
+      }),
+      { advisoryCaseIds: ["regression-fact-boundary-smoke-001"] },
+    );
+    assert.equal(orch.action, "decide_with_warnings");
+    assert.equal(orch.publishBlocked, false);
+    assert.equal(orch.mandatoryPublishReady, true);
+    assert.equal(orch.requiresExplicitPublishConfirmation, true);
+    assert.match(orch.guidance, /系统自动回归样本/);
+  });
+
   it("returns decide_with_warnings when only judge fails", () => {
     const orch = deriveEvaluationOrchestration(
       baseEvaluate({

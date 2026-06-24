@@ -509,9 +509,19 @@ export async function previewPolicyEffect(
     candidateMessage: string;
     conversationHistory?: string[];
     recruiterUsername?: string;
+    conversationId?: string;
+    candidateId?: string;
   },
   configInput?: ReplyAuthorityConfig,
 ): Promise<RasResponse<PreviewPolicyEffectResponse>> {
+  if (!hasCompleteConversationIdentity(body)) {
+    return {
+      ok: false,
+      status: 400,
+      errorMessage: "真实会话 ID 和候选人 ID 必须同时传入；如果当前拿不到，可以两个都不传。",
+    };
+  }
+
   const binding = await resolveRecruiterUsername(tenantId, body.recruiterUsername, configInput);
   if (!binding.ok || binding.data === undefined) {
     return {
@@ -538,8 +548,8 @@ export async function previewPolicyEffect(
             platform: "zhipin",
             username: binding.data.username,
           },
-          conversationId: "preview-conv",
-          candidateId: "preview-candidate",
+          conversationId: body.conversationId ?? "preview-conv",
+          candidateId: body.candidateId ?? "preview-candidate",
         },
       },
     },
@@ -576,7 +586,13 @@ export function buildEvaluateTargetInput(input: {
   readonly candidateMessage: string;
   readonly conversationHistory?: string[];
   readonly defaultWechatId?: string;
+  readonly conversationId?: string;
+  readonly candidateId?: string;
 }): EvaluateCaseInput["input"] {
+  if (!hasCompleteConversationIdentity(input)) {
+    throw new Error("真实会话 ID 和候选人 ID 必须同时传入；如果当前拿不到，可以两个都不传。");
+  }
+
   return {
     candidateMessage: input.candidateMessage,
     ...(input.conversationHistory !== undefined
@@ -590,8 +606,18 @@ export function buildEvaluateTargetInput(input: {
         platform: "zhipin",
         username: input.recruiterUsername,
       },
-      conversationId: `eval-${input.caseId}`,
-      candidateId: `candidate-${input.caseId}`,
+      conversationId: input.conversationId ?? `eval-${input.caseId}`,
+      candidateId: input.candidateId ?? `candidate-${input.caseId}`,
     },
   };
+}
+
+function hasCompleteConversationIdentity(input: {
+  readonly conversationId?: string;
+  readonly candidateId?: string;
+}): boolean {
+  return (
+    (input.conversationId === undefined && input.candidateId === undefined) ||
+    (input.conversationId !== undefined && input.candidateId !== undefined)
+  );
 }

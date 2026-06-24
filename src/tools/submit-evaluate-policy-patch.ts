@@ -10,9 +10,11 @@ import { deriveEvaluationOrchestration } from "../presentation/evaluation-orches
 import { formatEvaluationSummaryMarkdown } from "../presentation/evaluation-summary.ts";
 import { evaluatePolicyPatch, isReplyAuthorityTimeout } from "../services/reply-authority-client.ts";
 import { hashPolicyPatch, recordEvaluatePublishGate } from "../evaluate-publish-gate.ts";
+import { assertPolicyPatchShape } from "../policy-patch-guard.ts";
 import { translateRasHttpError } from "../ras-errors.ts";
 import { EvaluationOrchestrationSchema } from "../presentation/evaluation-orchestration.ts";
 import { BuiltCaseSchema, EvaluateSummarySchema } from "../types/reply-policy.ts";
+import { ADVISORY_REGRESSION_TAG, SYSTEM_AUTO_REGRESSION_TAG } from "../evaluate-regression-cases.ts";
 
 const SubmitEvaluatePolicyPatchInputSchema = z.object({
   tenantId: z.string().min(1).describe("目标运营人员 ID（tenantId）"),
@@ -44,6 +46,11 @@ type BuiltCase = z.infer<typeof BuiltCaseSchema>;
 
 type EvaluateAttemptLabel = "first" | "retry";
 
+function isAdvisoryRegressionCase(item: BuiltCase): boolean {
+  const tags = item.tags ?? [];
+  return tags.includes(SYSTEM_AUTO_REGRESSION_TAG) && tags.includes(ADVISORY_REGRESSION_TAG);
+}
+
 function evaluateTimerLabel(attempt: EvaluateAttemptLabel): string {
   return `submit_evaluate_policy_patch:evaluate:${attempt}`;
 }
@@ -56,6 +63,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
   output: SubmitEvaluatePolicyPatchOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Submitting evaluate policy patch for tenant: ${input.tenantId}`);
+    assertPolicyPatchShape(input.patch);
 
     const { cases: firstAttemptCases, capped: cappedBeforeFirstAttempt } = capCasesForFirstAttempt(
       input.cases,
@@ -132,15 +140,26 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       throw new Error("评估补丁成功但响应数据为空");
     }
 
-    const orchestration = deriveEvaluationOrchestration(data);
+    const advisoryCaseIds = usedCases
+      .filter((item) => isAdvisoryRegressionCase(item))
+      .map((item) => item.caseId);
+    const orchestration = deriveEvaluationOrchestration(data, { advisoryCaseIds });
+    const effectiveHardRecommendedForPublish =
+      orchestration.mandatoryPublishReady && !orchestration.publishBlocked
+        ? true
+        : data.summary.hardRecommendedForPublish;
+    const effectiveFactRecommendedForPublish =
+      orchestration.mandatoryPublishReady && !orchestration.publishBlocked
+        ? true
+        : data.summary.factRecommendedForPublish;
 
     await recordEvaluatePublishGate({
       tenantId: data.tenantId,
       basePolicyVersion: data.basePolicyVersion,
       patchDigest: hashPolicyPatch(input.patch),
       recommendedForPublish: data.summary.recommendedForPublish,
-      hardRecommendedForPublish: data.summary.hardRecommendedForPublish,
-      factRecommendedForPublish: data.summary.factRecommendedForPublish,
+      hardRecommendedForPublish: effectiveHardRecommendedForPublish,
+      factRecommendedForPublish: effectiveFactRecommendedForPublish,
       publishBlocked: orchestration.publishBlocked,
       orchestrationAction: orchestration.action,
       evaluatedAtMs: Date.now(),
@@ -159,7 +178,7 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       summary: data.summary,
       recommendedForPublish: data.summary.recommendedForPublish,
       orchestration,
-      evaluationSummaryMarkdown: formatEvaluationSummaryMarkdown(data),
+      evaluationSummaryMarkdown: formatEvaluationSummaryMarkdown(data, { advisoryCaseIds }),
       warnings: [...preAttemptWarnings, ...degradedNotice, ...data.warnings],
     };
   },

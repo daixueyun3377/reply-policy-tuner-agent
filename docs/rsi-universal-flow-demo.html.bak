@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RSI Universal Flow Demo</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d8dee8;
+      --green: #0f766e;
+      --blue: #2563eb;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --soft-green: #ecfdf5;
+      --soft-blue: #eff6ff;
+      --soft-amber: #fff7ed;
+      --soft-red: #fef2f2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 34px 22px 54px;
+    }
+
+    .hero,
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0 0 14px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 34px;
+    }
+
+    h2 {
+      font-size: 25px;
+    }
+
+    h3 {
+      font-size: 18px;
+      margin-top: 22px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .lead {
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin: 24px 0 10px;
+    }
+
+    .step {
+      position: relative;
+      min-height: 170px;
+      padding: 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .step-num {
+      display: inline-flex;
+      width: 26px;
+      height: 26px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--green);
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+
+    .step-subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .step ul {
+      padding-left: 18px;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .loop-note {
+      border: 1px solid #bfdbfe;
+      background: var(--soft-blue);
+      color: #1e3a8a;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #111827;
+    }
+
+    .lane-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .lane {
+      display: grid;
+      grid-template-columns: 190px repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .lane > div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 78px;
+      background: #ffffff;
+      font-size: 13px;
+    }
+
+    .lane .label {
+      background: #111827;
+      color: #ffffff;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+    }
+
+    .lane .observe {
+      background: var(--soft-blue);
+    }
+
+    .lane .diagnose {
+      background: var(--soft-amber);
+    }
+
+    .lane .propose {
+      background: var(--soft-green);
+    }
+
+    .lane .gate {
+      background: var(--soft-red);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #ffffff;
+      font-size: 13px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fbfcfe;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .card p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .callout {
+      border-left: 4px solid var(--green);
+      background: var(--soft-green);
+      padding: 12px 14px;
+      margin-top: 16px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .warning {
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    code {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    @media (max-width: 1040px) {
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .step:not(:last-child)::after {
+        content: "↓";
+        right: auto;
+        left: 50%;
+        top: auto;
+        bottom: -18px;
+        transform: translateX(-50%);
+      }
+
+      .lane {
+        grid-template-columns: 1fr;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="hero">
+      <p class="eyebrow">RSI Universal Flow Demo</p>
+      <h1>所有 Agent 共用同一条 RSI 生命周期</h1>
+      <p class="lead">RSI 的主流程对所有业务 Agent（智能体）一致：观察、诊断、提出候选、评估、决策、发布、再观察。差异在于每个 Agent 的样本、问题类型、候选优化、评估方式和发布门禁不同。</p>
+    </div>
+
+    <section>
+      <h2>1. 通用主流程</h2>
+      <div class="flow">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-title">Observe（观察）</div>
+          <div class="step-subtitle">收集证据链</div>
+          <ul>
+            <li>用户反馈</li>
+            <li>模型输出</li>
+            <li>人工改写</li>
+            <li>评估结果</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-title">Diagnose（诊断）</div>
+          <div class="step-subtitle">发现和归因问题</div>
+          <ul>
+            <li>失败聚类</li>
+            <li>问题归因</li>
+            <li>影响面分析</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-title">Propose（提出候选）</div>
+          <div class="step-subtitle">生成 Candidate（候选优化）</div>
+          <ul>
+            <li>策略补丁</li>
+            <li>提示词补丁</li>
+            <li>回归样本</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-title">Evaluate（评估）</div>
+          <div class="step-subtitle">用业务评估体系验证</div>
+          <ul>
+            <li>回归测试</li>
+            <li>安全检查</li>
+            <li>质量评估</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-title">Decide（决策）</div>
+          <div class="step-subtitle">人工或规则确认</div>
+          <ul>
+            <li>接受</li>
+            <li>拒绝</li>
+            <li>修订</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">6</div>
+          <div class="step-title">Release（发布）</div>
+          <div class="step-subtitle">通过业务门禁上线</div>
+          <ul>
+            <li>策略写入</li>
+            <li>Prompt 更新</li>
+            <li>Few-shot 更新</li>
+          </ul>
+        </div>
+        <div class="step">
+          <div class="step-num">7</div>
+          <div class="step-title">Observe Again（再观察）</div>
+          <div class="step-subtitle">验证真实效果</div>
+          <ul>
+            <li>正向收益</li>
+            <li>负向回归</li>
+            <li>回滚建议</li>
+          </ul>
+        </div>
+      </div>
+      <div class="loop-note">发布后效果会回流到 Observe（观察）阶段，形成下一轮优化。RSI 不是一次性修复，而是持续闭环。</div>
+    </section>
+
+    <section>
+      <h2>2. 同一流程，不同业务含义</h2>
+      <div class="legend">
+        <span class="pill">蓝色：收集与观察</span>
+        <span class="pill">橙色：诊断归因</span>
+        <span class="pill">绿色：候选优化</span>
+        <span class="pill">红色：评估与发布门禁</span>
+      </div>
+      <div class="lane-grid">
+        <div class="lane">
+          <div class="label">阶段</div>
+          <div>Observe<br>观察</div>
+          <div>Diagnose<br>诊断</div>
+          <div>Propose<br>提出候选</div>
+          <div>Evaluate<br>评估</div>
+          <div>Decide<br>决策</div>
+          <div>Release<br>发布</div>
+          <div>Observe Again<br>再观察</div>
+        </div>
+
+        <div class="lane">
+          <div class="label">reply-policy-tuner<br>回复策略调优</div>
+          <div class="observe">收集 patch、preview、evaluate、update、回复效果</div>
+          <div class="diagnose">归因为语气、CTA、事实门禁、阶段策略等问题</div>
+          <div class="propose">生成 policy patch 或 schema change proposal</div>
+          <div class="gate">RAS validate / preview / evaluate</div>
+          <div class="gate">运营确认是否保存</div>
+          <div class="gate">update_policy 写入</div>
+          <div class="observe">观察低质回复、事实阻断、人工接管</div>
+        </div>
+
+        <div class="lane">
+          <div class="label">企业微信回复<br>话术生成</div>
+          <div class="observe">收集模型回复、人工改写、用户反馈、人工接管</div>
+          <div class="diagnose">归因为生硬、过早邀约、事实表达不稳等问题</div>
+          <div class="propose">生成 prompt / template / strategy candidate</div>
+          <div class="gate">话术质量评估、事实校验、人工抽检</div>
+          <div class="gate">运营或规则确认灰度</div>
+          <div class="gate">更新 Prompt（提示词）或模板</div>
+          <div class="observe">观察采纳率、改写率、转化和负反馈</div>
+        </div>
+
+        <div class="lane">
+          <div class="label">NL2SQL<br>自然语言转 SQL</div>
+          <div class="observe">收集问题、生成 SQL、执行结果、错误类型</div>
+          <div class="diagnose">归因为漏时间条件、Join 错误、指标口径错误等</div>
+          <div class="propose">生成 few-shot / schema hint / prompt rule candidate</div>
+          <div class="gate">SQL 执行、结果一致性、安全检查</div>
+          <div class="gate">数据或开发负责人确认</div>
+          <div class="gate">更新 Few-shot（少样本）或配置</div>
+          <div class="observe">观察 SQL 正确率、执行失败率和安全告警</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 公共对象与业务 Payload（业务载荷）</h2>
+      <p>RSI backend core（后端核心服务）统一管理生命周期对象，但业务细节放在 payload（业务载荷）里，由各业务 Adapter（适配器）解释。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>公共对象</th>
+            <th>中文含义</th>
+            <th>跨 Agent 是否统一</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Event</td><td>事件</td><td>统一：记录发生了什么</td></tr>
+          <tr><td>Sample</td><td>样本</td><td>统一：可复用的问答、SQL、改写等样本</td></tr>
+          <tr><td>Problem</td><td>问题归因</td><td>统一生命周期，业务 problemType 分开</td></tr>
+          <tr><td>Candidate</td><td>候选优化</td><td>统一生命周期，业务 candidateType 分开</td></tr>
+          <tr><td>Evaluation</td><td>评估记录</td><td>统一状态，评估方法分开</td></tr>
+          <tr><td>Release</td><td>发布记录</td><td>统一记录，发布方式分开</td></tr>
+          <tr><td>Observation</td><td>发布后观察</td><td>统一记录，指标分开</td></tr>
+        </tbody>
+      </table>
+
+      <div class="cards">
+        <div class="card">
+          <strong>reply-policy candidate</strong>
+          <p><code>candidateType = policy_patch</code><br>payload 里是策略 patch、受影响策略路径、评估样本。</p>
+        </div>
+        <div class="card">
+          <strong>wechat-reply candidate</strong>
+          <p><code>candidateType = prompt_patch</code><br>payload 里是提示词补丁、模板修改、人工改写证据。</p>
+        </div>
+        <div class="card">
+          <strong>nl2sql candidate</strong>
+          <p><code>candidateType = few_shot_case</code><br>payload 里是自然语言问题、SQL、schema hint 和错误归因。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 关键边界</h2>
+      <div class="callout">
+        <strong>统一的是生命周期，不统一业务门禁。</strong>
+        <p>所有 Agent 都走 Observe → Diagnose → Propose → Evaluate → Decide → Release → Observe Again，但每个 Agent 的评估方式、发布规则和安全门禁必须独立。</p>
+      </div>
+      <div class="callout warning">
+        <strong>RSI 只生成 Candidate（候选优化），不直接发布。</strong>
+        <p>reply-policy candidate 回到 tuner/RAS；企业微信回复 candidate 回到话术评估和人工确认；NL2SQL candidate 回到 SQL 执行和安全检查。</p>
+      </div>
+      <table>
+        <thead>
+          <tr><th>统一</th><th>不统一</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Event / Sample / Problem / Candidate / Evaluation / Release / Observation</td><td>problemType、candidateType、payload、评估方法、发布方式</td></tr>
+          <tr><td>候选优化生命周期</td><td>业务字段、Prompt、SQL、策略 schema</td></tr>
+          <tr><td>审计、幂等、权限、租户隔离</td><td>各 Agent 的安全规则和发布门禁</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
+

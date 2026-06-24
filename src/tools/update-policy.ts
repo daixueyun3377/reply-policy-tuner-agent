@@ -3,6 +3,7 @@ import { defineTool } from "@roll-agent/sdk";
 import { z } from "zod";
 import { describeDangerousPatchReason, isDangerousPolicyPatch } from "../dangerous-patch.ts";
 import { assertEvaluatePublishGateAllowsUpdate } from "../evaluate-publish-gate.ts";
+import { assertPolicyPatchShape } from "../policy-patch-guard.ts";
 import { updatePolicy } from "../services/reply-authority-client.ts";
 import { assertTunerToolAllowed } from "../policy.ts";
 import { translateRasHttpError } from "../ras-errors.ts";
@@ -34,6 +35,7 @@ export const updatePolicyTool = defineTool({
   output: UpdatePolicyOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Updating reply policy for tenant: ${input.tenantId}`);
+    assertPolicyPatchShape(input.patch);
 
     await assertEvaluatePublishGateAllowsUpdate({
       tenantId: input.tenantId,

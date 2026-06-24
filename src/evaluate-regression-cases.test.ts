@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { appendSystemRegressionCases } from "./evaluate-regression-cases.ts";
+import {
+  ADVISORY_REGRESSION_TAG,
+  appendSystemRegressionCases,
+  SYSTEM_AUTO_REGRESSION_TAG,
+} from "./evaluate-regression-cases.ts";
 
 describe("appendSystemRegressionCases", () => {
   it("adds one system fact boundary smoke regression for primary-only input", () => {
@@ -12,6 +16,8 @@ describe("appendSystemRegressionCases", () => {
       cases.map((item) => item.caseId),
       ["p1", "regression-fact-boundary-smoke-001"],
     );
+    assert.ok(cases[1]?.tags?.includes(SYSTEM_AUTO_REGRESSION_TAG));
+    assert.ok(cases[1]?.tags?.includes(ADVISORY_REGRESSION_TAG));
   });
 
   it("keeps user cases and adds the fact boundary smoke when no fact safety regression exists", () => {

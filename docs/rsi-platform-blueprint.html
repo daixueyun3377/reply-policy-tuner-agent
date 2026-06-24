@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RSI Platform Blueprint</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d8dee8;
+      --accent: #0f766e;
+      --accent-2: #2563eb;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --soft: #eef6f5;
+      --code: #111827;
+      --code-bg: #f1f5f9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    a {
+      color: var(--accent-2);
+      text-decoration: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 28px 22px;
+      background: #101827;
+      color: #e5e7eb;
+      border-right: 1px solid #0b1220;
+    }
+
+    nav h1 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    nav p {
+      margin: 0 0 22px;
+      color: #a8b3c7;
+      font-size: 13px;
+    }
+
+    nav a {
+      display: block;
+      padding: 7px 0;
+      color: #dbe4f0;
+      font-size: 14px;
+    }
+
+    nav a:hover {
+      color: #ffffff;
+    }
+
+    main {
+      padding: 36px;
+      max-width: 1180px;
+      width: 100%;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 22px;
+    }
+
+    .hero {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 34px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin: 0 0 10px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 26px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    .hero h2 {
+      font-size: 34px;
+      margin-bottom: 12px;
+    }
+
+    .hero .lead {
+      max-width: 840px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .summary-grid,
+    .three-grid,
+    .two-grid {
+      display: grid;
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .three-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .two-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fbfcfe;
+    }
+
+    .box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #111827;
+    }
+
+    .box span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .flow-label {
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--soft);
+      color: #115e59;
+      font-weight: 700;
+      border: 1px solid #c8e3df;
+    }
+
+    .flow-content {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .arch {
+      display: grid;
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .arch-layer {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 14px;
+    }
+
+    .arch-layer header {
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      border: 1px solid #c7d2fe;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #111827;
+    }
+
+    code,
+    pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: var(--code);
+    }
+
+    pre {
+      overflow: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .warning {
+      border-left-color: var(--warn);
+      background: #fff7ed;
+    }
+
+    .danger {
+      border-left-color: var(--danger);
+      background: #fef2f2;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .phase-num {
+      background: #0f766e;
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .phase-body {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .phase-body h4 {
+      margin-top: 0;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        position: relative;
+        height: auto;
+      }
+
+      main {
+        padding: 20px;
+      }
+
+      .summary-grid,
+      .three-grid,
+      .two-grid,
+      .flow-row,
+      .phase {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav>
+      <h1>RSI Platform Blueprint</h1>
+      <p>团队沟通版：愿景、架构、自我优化、风险治理与任务拆分。</p>
+      <a href="#vision">1. 整体愿景</a>
+      <a href="#architecture">2. 架构设计</a>
+      <a href="#optimization">3. 自我优化内容</a>
+      <a href="#risks">4. 风险与防护</a>
+      <a href="#roadmap">5. 任务拆分</a>
+      <a href="#decisions">6. 决策建议</a>
+    </nav>
+
+    <main>
+      <div class="hero">
+        <p class="eyebrow">Recursive Self-Improvement</p>
+        <h2>把用户反馈、评估失败和发布效果变成可审计的持续优化闭环</h2>
+        <p class="lead">RSI 不是让模型自动乱改系统，而是一个跨 Agent（智能体）的优化平台。公共 Backend Core（后端核心服务）负责证据链和生命周期，Optimizer（优化器）负责发现和建议，业务 Adapter（适配器）负责语义映射，业务 Agent（智能体）负责评估和发布门禁。</p>
+        <div class="summary-grid">
+          <div class="box"><strong>公共平台</strong><span>事件、样本、问题、候选、评估、发布、观察。</span></div>
+          <div class="box"><strong>通用优化</strong><span>聚类、归因、候选生成、样本选择、效果分析。</span></div>
+          <div class="box"><strong>业务适配</strong><span>reply-policy、企业微信回复、nl2sql 各自定义语义。</span></div>
+          <div class="box"><strong>受控发布</strong><span>Candidate-only（只生成候选、不自动发布），发布回到各 Agent（智能体）的门禁。</span></div>
+        </div>
+      </div>
+
+      <section id="vision">
+        <h2>1. RSI 整体愿景</h2>
+        <p>RSI 的目标是让产品具备持续学习能力：用户用得越多，系统越知道哪里不好；系统越知道哪里不好，越能提出可验证的优化；优化经过评估和发布后，真实效果再回流，形成下一轮优化。</p>
+
+        <div class="flow">
+          <div class="flow-row">
+            <div class="flow-label">输入</div>
+            <div class="flow-content">真实会话、运营反馈、人工改写、评估失败、Judge 告警、SQL 执行失败、发布后指标。</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-label">智能分析</div>
+            <div class="flow-content">失败聚类、问题归因、候选优化生成、评估样本选择、发布后效果分析。</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-label">业务门禁</div>
+            <div class="flow-content">reply-policy 走 RAS validate / preview / evaluate / update（校验 / 预览 / 评估 / 写入）；NL2SQL 走 SQL 执行和安全评估；企业微信回复走话术质量和事实校验。</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-label">输出</div>
+            <div class="flow-content">可解释的候选优化、回归样本、发布记录、效果观察、回滚建议。</div>
+          </div>
+        </div>
+
+        <h3>产品竞争力提升</h3>
+        <div class="three-grid">
+          <div class="box"><strong>质量提升</strong><span>回复更贴合业务，SQL 正确率更高，高频失败进入回归集。</span></div>
+          <div class="box"><strong>效率提升</strong><span>系统自动整理问题和候选优化，减少重复人工调参。</span></div>
+          <div class="box"><strong>数据护城河</strong><span>真实反馈、改写、失败和发布效果沉淀为长期优化资产。</span></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>优化对象</th><th>候选优化</th><th>发布门禁</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>reply-policy-tuner</td><td>回复策略 JSON</td><td>Policy Patch（策略补丁）、Regression Case（回归样本）</td><td>RAS validate / preview / evaluate / update（校验 / 预览 / 评估 / 写入）</td></tr>
+            <tr><td>企业微信回复</td><td>Prompt（提示词）、模板、话术策略</td><td>Prompt Patch（提示词补丁）、Template Patch（模板补丁）、Strategy Patch（策略补丁）</td><td>话术质量评估、事实校验、人工确认</td></tr>
+            <tr><td>NL2SQL</td><td>Prompt（提示词）、Few-shot（少样本示例）、Schema Hint（数据结构提示）、Guardrail（安全护栏）</td><td>Few-shot（少样本示例）、Schema Hint（数据结构提示）、Prompt Rule（提示词规则）</td><td>SQL 执行、结果一致性、安全检查</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="architecture">
+        <h2>2. 架构设计</h2>
+        <div class="arch">
+          <div class="arch-layer">
+            <header>业务 Agent（Business Agents）</header>
+            <div class="chips">
+              <span class="chip">回复策略调优 Agent</span>
+              <span class="chip">企业微信回复 Agent</span>
+              <span class="chip">NL2SQL Agent</span>
+            </div>
+          </div>
+          <div class="arch-layer">
+            <header>事件接入（Event Ingestion）</header>
+            <p>REST API、Webhook（网页回调）、RAS Forwarding（RAS 转发）、Agent SDK（智能体开发包）。事件写入必须幂等，失败不能阻塞主业务流程。</p>
+          </div>
+          <div class="arch-layer">
+            <header>RSI 后端核心服务（RSI Backend Core）</header>
+            <div class="chips">
+              <span class="chip">Event（事件）</span>
+              <span class="chip">Sample（样本）</span>
+              <span class="chip">Problem（问题归因）</span>
+              <span class="chip">Candidate（候选优化）</span>
+              <span class="chip">Evaluation（评估记录）</span>
+              <span class="chip">Release（发布记录）</span>
+              <span class="chip">Observation（发布后观察）</span>
+            </div>
+          </div>
+          <div class="arch-layer">
+            <header>RSI 优化服务（RSI Optimizer Service）</header>
+            <p>样本聚类、问题归因、候选生成、评估样本选择、发布后效果分析、报告生成。</p>
+          </div>
+          <div class="arch-layer">
+            <header>业务适配器（Business Adapters）</header>
+            <p>将通用优化结果映射成对应业务可评估、可发布的 Candidate（候选优化）。</p>
+          </div>
+          <div class="arch-layer">
+            <header>评估与发布门禁（Evaluation and Publish Gates）</header>
+            <p>业务 Agent（智能体）保留最终评估与发布门禁。RSI 不直接发布。</p>
+          </div>
+        </div>
+
+        <h3>推荐技术栈</h3>
+        <table>
+          <thead>
+            <tr><th>层级</th><th>推荐</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Backend Core（后端核心服务）</td><td>TypeScript + Node.js + NestJS 或 Fastify</td><td>RAS 已使用 Node，优先沿用 RAS 当前框架、鉴权、日志、配置和部署方式。</td></tr>
+            <tr><td>Optimizer Worker（优化任务进程）</td><td>TypeScript + BullMQ / Redis Stream</td><td>第一阶段用 Node Worker（Node 任务进程），后续复杂 Embedding（向量化）、聚类、ML Pipeline（机器学习流水线）可拆 Python Worker（Python 任务进程）。</td></tr>
+            <tr><td>Database（数据库）</td><td>PostgreSQL + JSONB</td><td>结构字段用于查询，JSONB（PostgreSQL 的 JSON 存储类型）存不同业务 Payload（业务载荷）。</td></tr>
+            <tr><td>Vector（向量检索）</td><td>pgvector 起步</td><td>pgvector（PostgreSQL 向量检索扩展）在样本相似检索需要时引入。</td></tr>
+            <tr><td>Queue（任务队列）</td><td>Redis + BullMQ</td><td>BullMQ（基于 Redis 的 Node.js 任务队列）用于异步处理事件和 Optimizer Job（优化任务）；已有 Kafka（分布式消息队列）时可复用 Kafka。</td></tr>
+            <tr><td>LLM（大语言模型）</td><td>用于归因、候选草稿、报告</td><td>LLM 输出必须结构化校验，不能直接发布。</td></tr>
+            <tr><td>Observability（可观测性）</td><td>traceId（链路追踪 ID）、eventId（事件 ID）、candidateId（候选优化 ID）、audit log（审计日志）</td><td>保证可追溯、可排障、可回滚。</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <strong>架构建议：</strong>第一期做 TypeScript/Node 模块化单体 + BullMQ Worker（任务进程）+ PostgreSQL + Redis，不要一开始拆复杂微服务。后续再拆 Optimizer Service（优化服务）、Adapter Worker（适配器任务进程）或 Report Service（报告服务）。
+        </div>
+
+        <h3>RAS 与 RSI 的关系</h3>
+        <pre>推荐：
+tuner agent（调优智能体） → RAS
+RAS → RSI backend
+
+短期备选：
+tuner agent（调优智能体） → RAS
+tuner agent（调优智能体） → RSI backend（RSI 后端） async fire-and-forget（异步上报，不阻塞主流程）</pre>
+        <p>reply-policy 场景中，RAS 更接近策略、评估和发布事实源。优先让 RAS 转发事件给 RSI backend，tuner 不做长期数据仓库。</p>
+      </section>
+
+      <section id="optimization">
+        <h2>3. 自我优化内容</h2>
+        <h3>通用优化能力</h3>
+        <div class="three-grid">
+          <div class="box"><strong>失败样本聚类</strong><span>发现高频失败模式，如语气偏冷、SQL 漏时间条件。</span></div>
+          <div class="box"><strong>问题归因</strong><span>区分策略问题、事实证据问题、Prompt（提示词）问题、Schema Linking（数据结构关联）问题。</span></div>
+          <div class="box"><strong>候选生成</strong><span>生成 Policy Patch（策略补丁）、Prompt Patch（提示词补丁）、Few-shot（少样本示例）、Schema Hint（数据结构提示）。</span></div>
+          <div class="box"><strong>样本选择</strong><span>自动选择 Primary Cases（主样本），补充 Regression Cases（回归样本）。</span></div>
+          <div class="box"><strong>效果分析</strong><span>比较发布前后指标，发现收益、回归或无效优化。</span></div>
+          <div class="box"><strong>报告生成</strong><span>输出周报、问题趋势和优化建议。</span></div>
+        </div>
+
+        <h3>候选优化（Candidate）生命周期</h3>
+        <pre>proposed（已提出）
+→ ready_for_evaluation（待评估）
+→ evaluating（评估中）
+→ evaluated_passed / evaluated_failed（评估通过 / 评估失败）
+→ accepted / rejected（已接受 / 已拒绝）
+→ released（已发布）
+→ observed_positive / observed_negative / rollback_suggested（观察为正向 / 观察为负向 / 建议回滚）</pre>
+
+        <h3>业务优化示例</h3>
+        <table>
+          <thead>
+            <tr><th>业务</th><th>自我优化内容</th><th>典型 candidate</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>reply-policy</td><td>语气、CTA、阶段策略、事实门禁、输出保护、回归样本</td><td><code>policy_patch</code></td></tr>
+            <tr><td>企业微信回复</td><td>Prompt（提示词）、模板、首轮承接、追问策略、CTA 时机、事实表达</td><td><code>prompt_patch</code>（提示词补丁） / <code>template_patch</code>（模板补丁）</td></tr>
+            <tr><td>NL2SQL</td><td>Few-shot（少样本示例）、Schema Hint（数据结构提示）、Join Rule（关联规则）、Metric Definition（指标定义）、SQL Guardrail（SQL 安全护栏）</td><td><code>few_shot_case</code>（少样本用例） / <code>schema_hint</code>（数据结构提示）</td></tr>
+          </tbody>
+        </table>
+
+        <div class="warning callout">
+          <strong>边界：</strong>Optimizer（优化器）只提出候选建议；真正的业务变更必须回到对应 Agent（智能体）的评估和发布门禁。
+        </div>
+      </section>
+
+      <section id="risks">
+        <h2>4. 风险与防护</h2>
+        <table>
+          <thead>
+            <tr><th>风险</th><th>说明</th><th>防护策略</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>过拟合</td><td>只对触发样本有效，泛化差。</td><td>训练/评估样本分离、固定回归集、灰度、发布后观察。</td></tr>
+            <tr><td>数据污染</td><td>错误反馈或低质量改写进入优化链路。</td><td>来源标记、置信度、人工审核、异常过滤。</td></tr>
+            <tr><td>奖励黑客</td><td>迎合 Judge 而不是真实质量。</td><td>frozen judge、多目标评估、线上指标、人工抽检。</td></tr>
+            <tr><td>安全旁路</td><td>候选优化放宽事实门禁或 SQL Guardrail（SQL 安全护栏）。</td><td>高危检测、强门禁、禁止自动发布。</td></tr>
+            <tr><td>归因错误</td><td>把事实库缺失误判为策略问题。</td><td>区分 policy issue 与 data/evidence issue。</td></tr>
+            <tr><td>指标误归因</td><td>发布后变化不是 candidate 导致。</td><td>灰度、对照组、置信度、分层分析。</td></tr>
+            <tr><td>隐私泄露</td><td>样本包含敏感信息。</td><td>脱敏、租户隔离、权限、保留周期。</td></tr>
+            <tr><td>成本失控</td><td>LLM 分析和评估调用过多。</td><td>分层采样、批处理、缓存、预算控制。</td></tr>
+            <tr><td>状态不一致</td><td>RAS、RSI、Agent（智能体）记录对不上。</td><td>traceId（链路追踪 ID）、eventId（事件 ID）、幂等键、版本号。</td></tr>
+            <tr><td>自动化过度</td><td>系统绕过人工和门禁直接发布。</td><td>Candidate-only（只生成候选、不自动发布），发布回业务 Agent（智能体）。</td></tr>
+            <tr><td>schema 膨胀</td><td>每个问题都新增字段。</td><td>第一层优先，第二层走 schema proposal。</td></tr>
+            <tr><td>跨业务污染</td><td>NL2SQL 优化逻辑影响 reply-policy。</td><td>公共生命周期，业务 Adapter（适配器）分离。</td></tr>
+            <tr><td>回滚困难</td><td>发布后变差但找不到来源。</td><td>Release（发布记录）、Affected Paths（受影响路径）、Rollback Plan（回滚方案）。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>防过拟合机制</h3>
+        <div class="two-grid">
+          <div class="box"><strong>样本隔离</strong><span>生成 candidate 和评估 candidate 使用不同样本。</span></div>
+          <div class="box"><strong>固定回归集</strong><span>每个 Agent（智能体）维护 Frozen Regression Suite（冻结回归测试套件）。</span></div>
+          <div class="box"><strong>小步优化</strong><span>一次 candidate 尽量只改少量对象。</span></div>
+          <div class="box"><strong>灰度发布</strong><span>按 tenant、场景或流量比例发布。</span></div>
+          <div class="box"><strong>发布后观察</strong><span>用真实指标确认收益和回归。</span></div>
+          <div class="box"><strong>多目标评估</strong><span>同时看质量、安全、事实、转化和成本。</span></div>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <h2>5. 任务拆分与路线图</h2>
+        <div class="timeline">
+          <div class="phase">
+            <div class="phase-num">Phase 0</div>
+            <div class="phase-body">
+              <h4>概念对齐与数据盘点</h4>
+              <p>确认三个 Agent（智能体）的 RSI 范围、数据来源、发布门禁和 RAS 当前存储能力。输出数据盘点表、接入边界和 MVP（最小可行产品）事件清单。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 1</div>
+            <div class="phase-body">
+              <h4>RSI backend core MVP</h4>
+              <p>建立 Events（事件）、Samples（样本）、Problems（问题归因）、Candidates（候选优化）、Evaluations（评估记录）、Releases（发布记录）、Observations（发布后观察），支持幂等写入、查询、权限和审计。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 2</div>
+            <div class="phase-body">
+              <h4>接入 reply-policy-tuner / RAS</h4>
+              <p>上报 Validate（校验）、Preview（预览）、Evaluate（评估）、Update / Release（写入 / 发布）事件，从 Evaluate 失败生成 Problem（问题归因）和 Policy Patch Candidate（策略补丁候选）。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 3</div>
+            <div class="phase-body">
+              <h4>optimizer service v1</h4>
+              <p>实现规则型归因、LLM（大语言模型）Problem Report（问题报告）草稿、失败样本聚类、Candidate（候选优化）草稿、Regression Case（回归样本）推荐和优化报告。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 4</div>
+            <div class="phase-body">
+              <h4>接入 NL2SQL Agent（智能体）</h4>
+              <p>上报 SQL 生成和执行结果，归因 SQL 错误，生成 Few-shot（少样本示例）、Schema Hint（数据结构提示）或 Prompt Rule Candidate（提示词规则候选）。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 5</div>
+            <div class="phase-body">
+              <h4>接入企业微信回复 Agent（智能体）</h4>
+              <p>上报模型回复、人工改写、用户反馈和人工接管，生成 Prompt / Template / Strategy Candidate（提示词 / 模板 / 策略候选）。</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 6</div>
+            <div class="phase-body">
+              <h4>治理、灰度与平台化</h4>
+              <p>建设 dashboard、灰度、回滚、成本治理、安全审批和周期性优化报告。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>6. 决策建议</h2>
+        <table>
+          <thead>
+            <tr><th>问题</th><th>推荐决策</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RSI backend core 用什么语言？</td><td>TypeScript / Node，并优先沿用 RAS 当前框架。</td></tr>
+            <tr><td>第一条链路接谁？</td><td>先接 reply-policy，因为已有完整 evaluate/update 门禁。</td></tr>
+            <tr><td>事件由谁上报？</td><td>reply-policy 优先由 RAS 转发；短期可 Agent（智能体）异步上报。</td></tr>
+            <tr><td>第一阶段是否自动发布？</td><td>不自动发布，只生成 candidate。</td></tr>
+            <tr><td>数据库怎么选？</td><td>PostgreSQL + JSONB（JSON 存储类型）起步，必要时加 pgvector（向量检索扩展）。</td></tr>
+            <tr><td>队列怎么选？</td><td>Redis + BullMQ 起步，已有 Kafka 可复用。</td></tr>
+            <tr><td>Adapter（适配器）谁维护？</td><td>各业务 Owner（负责人）维护，公共平台提供生命周期和接口。</td></tr>
+          </tbody>
+        </table>
+
+        <div class="danger callout">
+          <strong>底线：</strong>RSI Optimizer（优化器）生成的是候选优化，不是发布指令。任何业务变更都必须回到对应 Agent（智能体）的评估、确认和发布门禁。
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

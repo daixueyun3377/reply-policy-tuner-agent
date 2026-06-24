@@ -8,6 +8,7 @@ import {
 import { previewPolicyEffect } from "../services/reply-authority-client.ts";
 import { translateRasHttpError } from "../ras-errors.ts";
 import { PolicyDiffEntrySchema } from "../types/reply-policy.ts";
+import { assertPolicyPatchShape } from "../policy-patch-guard.ts";
 
 const PreviewPolicyEffectInputSchema = z.object({
   tenantId: z.string().min(1).describe("目标运营人员 ID（tenantId）"),
@@ -19,6 +20,24 @@ const PreviewPolicyEffectInputSchema = z.object({
     .describe("用于预览的示例候选人消息（默认用通用示例）"),
   conversationHistory: z.array(z.string()).optional().describe("对话历史（可选）"),
   recruiterUsername: z.string().optional().describe("BOSS 招聘账号名（可选；未提供时自动解析）"),
+  conversationId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("真实会话 ID（可选；如果当前上下文能拿到，必须和 candidateId 一起原样传入）"),
+  candidateId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("真实候选人 ID（可选；如果当前上下文能拿到，必须和 conversationId 一起原样传入）"),
+}).superRefine((value, ctx) => {
+  if ((value.conversationId === undefined) !== (value.candidateId === undefined)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "真实会话 ID 和候选人 ID 必须同时传入；如果当前拿不到，可以两个都不传。",
+      path: value.conversationId === undefined ? ["conversationId"] : ["candidateId"],
+    });
+  }
 });
 
 const PreviewPolicyEffectOutputSchema = z.object({
@@ -43,6 +62,7 @@ export const previewPolicyEffectTool = defineTool({
   output: PreviewPolicyEffectOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Previewing policy effect for tenant: ${input.tenantId}`);
+    assertPolicyPatchShape(input.patch);
 
     const candidateMessage = input.sampleMessage ?? DEFAULT_SAMPLE_MESSAGE;
 
@@ -56,6 +76,8 @@ export const previewPolicyEffectTool = defineTool({
       ...(input.recruiterUsername !== undefined
         ? { recruiterUsername: input.recruiterUsername }
         : {}),
+      ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
+      ...(input.candidateId !== undefined ? { candidateId: input.candidateId } : {}),
     });
 
     if (!result.ok) {

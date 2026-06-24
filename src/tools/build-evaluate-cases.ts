@@ -1,16 +1,37 @@
 import { defineTool } from "@roll-agent/sdk";
 import { z } from "zod";
 import { appendSystemRegressionCases } from "../evaluate-regression-cases.ts";
+import { assertPolicyPatchShape } from "../policy-patch-guard.ts";
 import { buildEvaluateTargetInput } from "../services/reply-authority-client.ts";
 import { BuiltCaseSchema } from "../types/reply-policy.ts";
 
-const CaseInputSchema = z.object({
-  caseId: z.string().min(1).describe("用例 ID"),
-  role: z.enum(["primary", "regression"]).describe("primary=主样本；regression=回归样本"),
-  candidateMessage: z.string().min(1).describe("候选人消息"),
-  conversationHistory: z.array(z.string()).optional().describe("对话历史（可选）"),
-  tags: z.array(z.string()).optional().describe("标签（可选）"),
-});
+const CaseInputSchema = z
+  .object({
+    caseId: z.string().min(1).describe("用例 ID"),
+    role: z.enum(["primary", "regression"]).describe("primary=主样本；regression=回归样本"),
+    candidateMessage: z.string().min(1).describe("候选人消息"),
+    conversationHistory: z.array(z.string()).optional().describe("对话历史（可选）"),
+    conversationId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("真实会话 ID（可选；如果当前上下文能拿到，必须和 candidateId 一起原样传入）"),
+    candidateId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("真实候选人 ID（可选；如果当前上下文能拿到，必须和 conversationId 一起原样传入）"),
+    tags: z.array(z.string()).optional().describe("标签（可选）"),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.conversationId === undefined) !== (value.candidateId === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "真实会话 ID 和候选人 ID 必须同时传入；如果当前拿不到，可以两个都不传。",
+        path: value.conversationId === undefined ? ["conversationId"] : ["candidateId"],
+      });
+    }
+  });
 
 const BuildEvaluateCasesInputSchema = z.object({
   tenantId: z.string().min(1).describe("目标运营人员 ID（tenantId）"),
@@ -39,6 +60,7 @@ export const buildEvaluateCasesTool = defineTool({
   output: BuildEvaluateCasesOutputSchema,
   execute: async (input, ctx) => {
     ctx.logger.info(`Building evaluate cases for tenant: ${input.tenantId}`);
+    assertPolicyPatchShape(input.patch);
 
     const cases = appendSystemRegressionCases(input.cases);
 
@@ -54,6 +76,8 @@ export const buildEvaluateCasesTool = defineTool({
         ...(item.conversationHistory !== undefined
           ? { conversationHistory: item.conversationHistory }
           : {}),
+        ...(item.conversationId !== undefined ? { conversationId: item.conversationId } : {}),
+        ...(item.candidateId !== undefined ? { candidateId: item.candidateId } : {}),
       }),
     }));
 
