@@ -20,7 +20,7 @@ const ResolveRecruiterBindingOutputSchema = z.object({
 export const resolveRecruiterBindingTool = defineTool({
   name: "resolve_recruiter_binding",
   description:
-    "解析 BOSS 招聘账号绑定。两种用法：1）传 recruiterUsername（不传 tenantId）→ 返回该账号对应的 tenantId；2）传 tenantId + recruiterUsername → 校验绑定关系。会自动校验当前 token 是否有该 tenantId 的管理权限。",
+    "解析 BOSS 招聘账号绑定。默认修改本人策略时，传当前 BOSS recruiterUsername 且不传 tenantId，自动返回唯一绑定租户，不让用户选择。仅当用户明确修改他人策略并从 Token 可管理范围选定 tenantId 后，传 tenantId + 目标 recruiterUsername 校验绑定。始终自动校验当前 Token 是否有租户管理权限。",
   input: ResolveRecruiterBindingInputSchema,
   output: ResolveRecruiterBindingOutputSchema,
   execute: async (input, ctx) => {

@@ -38,7 +38,7 @@ const DEFAULT_SAMPLE_MESSAGE = "你好，想了解一下这个岗位";
 export const previewPolicyEffectTool = defineTool({
   name: "preview_policy_effect",
   description:
-    "生成修改前/后话术对比。【重要】展示预览后必须停顿等用户确认，由用户选择「按这个做评估」还是「继续改策略」——这是进入评估的确认点，禁止自动继续 submit_evaluate_policy_patch。只有用户明确同意评估后，下一步才是 submit_evaluate_policy_patch（安全评估）；用户选「继续改」则回到重新生成 patch。注意：preview 后的确认仅授权评估，不是落库确认——禁止在展示预览后说「确认写入吗」「要保存吗」。preview 通过只代表方向可能对，必须评估通过后才能问确认保存",
+    "生成修改前/后话术对比。【重要】展示预览后必须停顿并提示用户回复「确认评估」继续，或直接说明调整内容；不得要求点击按钮。只有用户文字明确同意评估后，下一步才是 submit_evaluate_policy_patch（安全评估）；要求调整则回到重新生成 patch。preview 后的确认仅授权评估；评估结果展示且允许发布后，调用 update_policy 获取唯一一次文字保存确认",
   input: PreviewPolicyEffectInputSchema,
   output: PreviewPolicyEffectOutputSchema,
   execute: async (input, ctx) => {

@@ -30,7 +30,7 @@ const ValidatePatchOutputSchema = z.object({
 export const validatePatchTool = defineTool({
   name: "validate_patch",
   description:
-    "校验策略补丁是否合法（不写入）；返回字段级 diff 与 lint 警告。validate 通过后自动继续 preview_policy_effect（无须向用户要确认）；preview 展示后须停顿等用户确认是否进入 submit_evaluate_policy_patch（安全评估）。不得在 validate 通过后问用户确认写入",
+    "校验策略补丁是否合法（不写入）；返回字段级 diff 与 lint 警告。valid=true 只表示结构和服务端规则通过，不能替代基于完整当前策略的语义一致性检查；该检查必须在向用户展示方案前完成并先内部修正冲突。validate 通过后自动继续 preview_policy_effect（无须向用户要确认）；preview 展示后须停顿等用户确认是否进入 submit_evaluate_policy_patch（安全评估）。不得在 validate 通过后问用户确认写入",
   input: ValidatePatchInputSchema,
   output: ValidatePatchOutputSchema,
   execute: async (input, ctx) => {

@@ -17,7 +17,9 @@ export type EvaluatePublishGateRecord = {
   patchDigest: string;
   /** 服务端 Hard∧Fact∧Judge 综合；Tool 门禁不以该字段为准 */
   recommendedForPublish: boolean;
+  /** 本地按 base/draft 增量结果推导的 Hard Gate 结论 */
   hardRecommendedForPublish: boolean;
+  /** 本地按 base/draft 增量结果推导的 Fact 结论 */
   factRecommendedForPublish: boolean;
   publishBlocked: boolean;
   orchestrationAction: EvaluationOrchestrationAction;

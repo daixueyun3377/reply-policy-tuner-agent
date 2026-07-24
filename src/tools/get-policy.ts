@@ -35,7 +35,7 @@ const GetPolicyOutputSchema = z.object({
 export const getPolicyTool = defineTool({
   name: "get_policy",
   description:
-    "读取当前生效策略。返回 policyVersion（编排须记下作 basePolicyVersion，勿向运营展示）与 operatorSummary（人设/阶段/保护规则等要点，供运营阅读）",
+    "读取当前生效策略。生成修改方案前必须不传 section、读取完整 policy，并在展示方案前结合候选 patch 做语义一致性检查；禁止先推荐方案再用现有策略反驳。返回 policyVersion（编排须记下作 basePolicyVersion，勿向运营展示）与 operatorSummary（人设/阶段/保护规则等要点，供运营阅读）",
   input: GetPolicyInputSchema,
   output: GetPolicyOutputSchema,
   execute: async (input, ctx) => {

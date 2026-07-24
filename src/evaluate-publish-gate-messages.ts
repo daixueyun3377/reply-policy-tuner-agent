@@ -14,11 +14,11 @@ export function buildEvaluatePublishGateUserMessage(input: {
 }): string {
   switch (input.reason) {
     case "missing_evaluate":
-      return "这次修改还没有完成评估，暂时不能保存。请先完成「策略评估」，评估通过后再确认写入。";
+      return "这次修改还没有完成评估，暂时不能保存。请先完成策略评估，通过后再请求保存确认。";
     case "corrupt_record":
       return "评估记录异常，请重新做一次完整评估后再保存。";
     case "expired":
-      return "之前的评估结果已过期，请重新评估一次；通过后再确认保存。";
+      return "之前的评估结果已过期，请重新评估一次；通过后再请求保存确认。";
     case "mismatch":
       return "当前要保存的内容和刚才评估时不一致。请用同一套修改重新评估，通过后再保存。";
     case "hard_block":

@@ -13,4 +13,10 @@ describe("evaluate publish gate user messages", () => {
     const message = buildEvaluatePublishGateUserMessage({ reason: "not_recommended" });
     assert.match(message, /硬性安全校验|事实核对/);
   });
+
+  it("does not require an approval button after evaluation", () => {
+    const message = buildEvaluatePublishGateUserMessage({ reason: "missing_evaluate" });
+    assert.match(message, /保存确认/);
+    assert.doesNotMatch(message, /点击|按钮|审批/);
+  });
 });

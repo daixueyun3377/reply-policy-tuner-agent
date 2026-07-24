@@ -4,7 +4,11 @@ import { z } from "zod";
 import { describeDangerousPatchReason, isDangerousPolicyPatch } from "../dangerous-patch.ts";
 import { assertEvaluatePublishGateAllowsUpdate } from "../evaluate-publish-gate.ts";
 import { updatePolicy } from "../services/reply-authority-client.ts";
-import { assertTunerToolAllowed } from "../policy.ts";
+import {
+  assertTunerToolAllowed,
+  getTunerPolicy,
+  type TunerToolPolicy,
+} from "../policy.ts";
 import { translateRasHttpError } from "../ras-errors.ts";
 import { ToolActionApprovalSchema } from "../tool-action-approval.ts";
 
@@ -26,10 +30,19 @@ const UpdatePolicyOutputSchema = z.object({
   warnings: z.array(z.string()),
 });
 
+/** update_policy 至少需要 confirm；显式 deny 仍优先。 */
+export function resolveUpdatePolicyApprovalPolicy(): TunerToolPolicy {
+  const configured = getTunerPolicy().tools["update_policy"]?.policy;
+  return configured === "deny" ? "deny" : "confirm";
+}
+
+export const UPDATE_POLICY_CONFIRMATION_MESSAGE =
+  "这次策略修改已通过安全检查。请回复「确认保存」完成修改，或回复「取消」。";
+
 export const updatePolicyTool = defineTool({
   name: "update_policy",
   description:
-    "对当前策略做局部更新（deep merge），写入前自动验证。须先 evaluate 且 Hard/Fact 通过；须先向运营展示评估结果并征得明确确认后再调用。首次调用返回 needs_confirmation，用户确认后带 toolActionApproval 重试才真正写入。用户的修改意图不等于确认写入。硬阻断后不得换 patch 写入。evaluate 超时/失败时禁止调用本 tool、禁止向用户提议跳过评估",
+    "对当前策略做局部更新（deep merge），写入前自动验证。须先 evaluate 且 orchestration.publishBlocked=false。评估结果展示后调用本 tool 获取唯一一次文字保存确认；无 toolActionApproval 时返回 needs_confirmation 并提示用户回复「确认保存」或「取消」，绝不会写入。用户文字明确确认后，上层原样合并 approvalRequest.retryInput 重试；不得要求点击按钮",
   input: UpdatePolicyInputSchema,
   output: UpdatePolicyOutputSchema,
   execute: async (input, ctx) => {
@@ -59,8 +72,8 @@ export const updatePolicyTool = defineTool({
           : `更新策略: ${input.reason}`,
       },
       deferApprovalConsumption: true,
-      confirmationMessage:
-        "这次策略修改已通过安全检查。请向运营展示变更对比与评估结果，待运营明确确认保存后再写入；确认后须带 toolActionApproval 重试本操作。",
+      policyOverride: resolveUpdatePolicyApprovalPolicy(),
+      confirmationMessage: UPDATE_POLICY_CONFIRMATION_MESSAGE,
       ...(input.toolActionApproval !== undefined ? { approval: input.toolActionApproval } : {}),
     } as const;
 

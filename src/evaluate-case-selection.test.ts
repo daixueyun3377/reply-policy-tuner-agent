@@ -6,14 +6,22 @@ import {
   pickEvaluateCases,
 } from "./evaluate-case-selection.ts";
 
-type Case = { caseId: string; role: "primary" | "regression" };
+type Case = {
+  caseId: string;
+  role: "primary" | "regression";
+  regressionScope?: "related" | "general";
+};
 
-function caseOf(caseId: string, role: Case["role"]): Case {
-  return { caseId, role };
+function caseOf(
+  caseId: string,
+  role: Case["role"],
+  regressionScope?: Case["regressionScope"],
+): Case {
+  return { caseId, role, ...(regressionScope !== undefined ? { regressionScope } : {}) };
 }
 
 describe("pickEvaluateCases", () => {
-  it("keeps 2 primary and 1 regression for default cap", () => {
+  it("respects explicit role limits", () => {
     const input = [
       caseOf("p1", "primary"),
       caseOf("p2", "primary"),
@@ -36,34 +44,64 @@ describe("capCasesForFirstAttempt", () => {
     assert.equal(cases.length, 2);
   });
 
-  it("caps 4 cases to 2p+1r", () => {
+  it("focuses multiple primary cases to 1p+2r", () => {
     const input = [
       caseOf("p1", "primary"),
       caseOf("p2", "primary"),
       caseOf("p3", "primary"),
       caseOf("r1", "regression"),
+      caseOf("r2", "regression"),
     ];
     const { cases, capped } = capCasesForFirstAttempt(input);
     assert.equal(capped, true);
     assert.equal(cases.length, 3);
     assert.deepEqual(
       cases.map((c) => c.caseId),
-      ["p1", "p2", "r1"],
+      ["p1", "r1", "r2"],
+    );
+  });
+
+  it("keeps up to two regression cases", () => {
+    const input = [
+      caseOf("p1", "primary"),
+      caseOf("r1", "regression"),
+      caseOf("r2", "regression"),
+    ];
+    const { cases, capped } = capCasesForFirstAttempt(input);
+    assert.equal(capped, false);
+    assert.deepEqual(
+      cases.map((c) => c.caseId),
+      ["p1", "r1", "r2"],
+    );
+  });
+
+  it("caps regression cases beyond two", () => {
+    const input = [
+      caseOf("p1", "primary"),
+      caseOf("r1", "regression"),
+      caseOf("r2", "regression"),
+      caseOf("r3", "regression"),
+    ];
+    const { cases, capped } = capCasesForFirstAttempt(input);
+    assert.equal(capped, true);
+    assert.deepEqual(
+      cases.map((c) => c.caseId),
+      ["p1", "r1", "r2"],
     );
   });
 });
 
 describe("degradeCasesForRetry", () => {
-  it("returns undefined when already 1p+1r", () => {
+  it("returns undefined when input cannot be reduced while retaining one regression", () => {
     const input = [caseOf("p1", "primary"), caseOf("r1", "regression")];
     assert.equal(degradeCasesForRetry(input), undefined);
   });
 
-  it("degrades 2p+1r to 1p+1r", () => {
+  it("drops one regression and retries with 1p+1r", () => {
     const input = [
       caseOf("p1", "primary"),
-      caseOf("p2", "primary"),
       caseOf("r1", "regression"),
+      caseOf("r2", "regression"),
     ];
     const degraded = degradeCasesForRetry(input);
     assert.notEqual(degraded, undefined);
@@ -73,7 +111,20 @@ describe("degradeCasesForRetry", () => {
     );
   });
 
-  it("degrades 3 primary without dropping to two primaries only", () => {
+  it("keeps the related regression when the general case appears first", () => {
+    const input = [
+      caseOf("p1", "primary"),
+      caseOf("general", "regression", "general"),
+      caseOf("related", "regression", "related"),
+    ];
+    const degraded = degradeCasesForRetry(input);
+    assert.deepEqual(
+      degraded!.map((c) => c.caseId),
+      ["p1", "related"],
+    );
+  });
+
+  it("degrades unexpected multiple primary input to the first target case", () => {
     const input = [caseOf("p1", "primary"), caseOf("p2", "primary"), caseOf("p3", "primary")];
     const degraded = degradeCasesForRetry(input);
     assert.deepEqual(

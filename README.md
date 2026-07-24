@@ -45,9 +45,9 @@
 - **12 个 MCP Tools**：从 `diagnostic_status` 到 `reset_policy`
 - **Evaluate 门禁**：评估成功后须在 TTL 内（默认 15 分钟）方可 `update_policy`
 - **编排信号**：`submit_evaluate_policy_patch` 返回 `orchestration.action`
-- **评估稳健性**：默认 2 primary + 1 regression；超 3 条裁切；超时降为 1p+1r 重试
+- **聚焦评估**：固定 1 条 primary + 1～2 条 regression，默认 1 条 related（修改相关）+ 1 条 general（通用观察）
 - **Judge 固定开启**：Hard Gate + Fact Verification + Frozen Rubric Judge
-- **双层确认**：预览后确认进入评估；评估后唯一写入确认；高危操作 `needs_confirmation`
+- **两次文字确认**：预览后回复「确认评估」；评估后回复「确认保存」或「取消」，不依赖按钮
 - **运营可读输出**：`operatorSummary`、`evaluationSummaryMarkdown`、对比表
 
 ## 环境要求
@@ -107,11 +107,16 @@ roll ask "评估并修改回复策略，先查账号再 evaluate" --json
 典型改策流程（编排层负责 browser-use 与用户确认）：
 
 ```text
-get_policy → validate_patch → preview_policy_effect
+默认：当前 BOSS 账号 → resolve_recruiter_binding → 自动取得 tenantId
+修改他人：diagnostic_status → 仅展示 Token 可管理租户 → 用户选择
+→ get_policy（完整策略）
+→ 内部检查并消除当前策略与候选方案的语义冲突
+→ validate_patch → preview_policy_effect
   → [用户确认评估]
   → build_evaluate_cases → submit_evaluate_policy_patch
-  → [按 orchestration 分支 + 用户确认写入]
-  → update_policy
+  → [展示评估结果]
+  → update_policy 返回 needs_confirmation
+  → [用户回复「确认保存」] → 上层合并内部 retryInput 重试写入
 ```
 
 门禁细则、租户解析、硬阻断话术：见 [SKILL.md](./SKILL.md)、[references/orchestration.md](./references/orchestration.md)。
@@ -143,11 +148,11 @@ Roll 环境声明：[`references/env.yaml`](./references/env.yaml)。
 | `get_policy` | 当前策略 + `policyVersion` + 运营摘要 |
 | `validate_patch` | 校验补丁；diff + warnings |
 | `resolve_recruiter_binding` | BOSS 账号 ↔ 租户（含权限校验） |
-| `build_evaluate_cases` | 拼装 evaluate 请求体 |
+| `build_evaluate_cases` | 用 preview 的 `sampleMessage` 锁定唯一目标 primary，拼装聚焦 evaluate 请求 |
 | `submit_evaluate_policy_patch` | 双路回放 + Judge；写入门禁；返回 `orchestration` |
 | `preview_policy_effect` | 单条话术预览 |
 | `format_policy_preview` | 合并运营可读 Markdown |
-| `update_policy` | 局部写入（evaluate 门禁 + 可选 `confirm`） |
+| `update_policy` | 局部写入（evaluate 门禁 + 强制文字保存确认；显式 `deny` 仍优先） |
 | `validate_policy` | 整份草稿校验（边缘场景） |
 | `reset_policy` | 删除租户覆盖（`confirm`，不经 evaluate 门禁） |
 
@@ -172,7 +177,7 @@ flowchart LR
 |------|------|
 | **上层编排** | 多 Agent 串联、用户确认、`orchestration` 分支 |
 | **reply-policy-tuner-agent** | MCP Tools、门禁存储、呈现层 |
-| **browser-use-agent** | 按需从 BOSS 获取 `recruiterUsername` |
+| **browser-use-agent** | 默认获取当前 BOSS 账号；修改他人策略时获取目标租户对应账号 |
 | **RAS** | 策略存储与 validate / preview / evaluate API |
 | **smart-reply-agent** | 运行时消费已发布策略 |
 
@@ -201,7 +206,7 @@ reply-policy-tuner-agent/
 ### 发布门禁（`update_policy` 不可绕过）
 
 1. 对同一 `tenantId`、`basePolicyVersion`、`patch` 成功执行 `submit_evaluate_policy_patch`
-2. `publishBlocked === false`，且 `hardRecommendedForPublish`、`factRecommendedForPublish` 均为 `true`
+2. `publishBlocked === false`；新增 Hard 始终阻塞，新增 Fact 仅在 primary/related 中阻塞
 3. 门禁记录在 `evaluateGateTtlMs` 内有效（默认 15 分钟）
 4. 写入的 patch 与最近一次 evaluate 完全一致
 
@@ -210,13 +215,16 @@ reply-policy-tuner-agent/
 | 值 | 含义 |
 |----|------|
 | `rollback_to_propose` | Hard / Fact 硬阻断，须改 patch 后重评 |
-| `decide_with_warnings` | Hard/Fact 已过，Judge 或回归有告警，用户确认后可发布 |
-| `ready_to_publish` | 评估通过，展示结果后用户确认再写入 |
+| `decide_with_warnings` | 本次无新增 Hard/Fact 阻塞，展示 Judge 告警后可请求文字保存确认 |
+| `ready_to_publish` | 评估通过，展示结果后请求文字保存确认 |
 
 ### 评估默认行为
 
-- 默认 **2 primary + 1 regression**；首次请求前超过 3 条则裁至 2p+1r
-- 超时：降为 **1p+1r** 重试一次；仍失败则报错（禁止跳过评估直接写入）
+- 固定 **1 条 primary**，必须复用本次 preview 或用户明确提出的问题
+- 必须有 **1～2 条 regression**，至少 1 条 related；默认生成 1 条 related + 1 条 general
+- primary/related 中新增 Hard/Fact 问题可阻塞；general 中新增 Hard 阻塞、新增 Fact 只告警
+- 所有样本都采用 base/draft 增量判定；历史已有问题只告警
+- 超时：优先保留目标 primary + 1 条 related regression 重试一次；仍失败则报错
 
 ## 本地开发
 

@@ -14,6 +14,7 @@ import {
   resetToolActionApprovalsForTests,
   setApprovalStoreDirForTests,
 } from "./tool-action-approval.ts";
+import { resolveUpdatePolicyApprovalPolicy } from "./tools/update-policy.ts";
 
 function createTestContext(): AgentContext {
   return {
@@ -129,5 +130,21 @@ describe("reply-policy-tuner tool policy", () => {
         return true;
       },
     );
+  });
+
+  it("forces update_policy log configuration to confirm", () => {
+    setTunerPolicy({
+      tools: { update_policy: { policy: "log" } },
+    });
+
+    assert.equal(resolveUpdatePolicyApprovalPolicy(), "confirm");
+  });
+
+  it("preserves explicit update_policy deny configuration", () => {
+    setTunerPolicy({
+      tools: { update_policy: { policy: "deny" } },
+    });
+
+    assert.equal(resolveUpdatePolicyApprovalPolicy(), "deny");
   });
 });

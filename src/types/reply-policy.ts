@@ -325,6 +325,7 @@ export type EvaluateTarget = z.infer<typeof EvaluateTargetSchema>;
 export const BuiltCaseSchema = z.object({
   caseId: z.string(),
   role: z.enum(["primary", "regression"]),
+  regressionScope: z.enum(["related", "general"]).optional(),
   tags: z.array(z.string()).optional(),
   input: z.object({
     candidateMessage: z.string(),

@@ -6,7 +6,10 @@ import {
   formatCapCasesWarning,
   formatDegradeCasesWarning,
 } from "../evaluate-case-selection.ts";
-import { deriveEvaluationOrchestration } from "../presentation/evaluation-orchestration.ts";
+import {
+  deriveEvaluationGateDecision,
+  deriveEvaluationOrchestration,
+} from "../presentation/evaluation-orchestration.ts";
 import { formatEvaluationSummaryMarkdown } from "../presentation/evaluation-summary.ts";
 import { evaluatePolicyPatch, isReplyAuthorityTimeout } from "../services/reply-authority-client.ts";
 import { hashPolicyPatch, recordEvaluatePublishGate } from "../evaluate-publish-gate.ts";
@@ -14,16 +17,51 @@ import { translateRasHttpError } from "../ras-errors.ts";
 import { EvaluationOrchestrationSchema } from "../presentation/evaluation-orchestration.ts";
 import { BuiltCaseSchema, EvaluateSummarySchema } from "../types/reply-policy.ts";
 
-const SubmitEvaluatePolicyPatchInputSchema = z.object({
+export const SubmitEvaluatePolicyPatchInputSchema = z.object({
   tenantId: z.string().min(1).describe("目标运营人员 ID（tenantId）"),
   basePolicyVersion: z.string().min(1).describe("当前策略版本"),
   patch: z.record(z.unknown()).describe("待评估的策略补丁"),
   cases: z
     .array(BuiltCaseSchema)
-    .min(1)
+    .min(2)
     .max(5)
+    .refine((cases) => cases.some((item) => item.role === "primary"), {
+      message: "聚焦评估至少需要 1 条本次目标 primary",
+    })
+    .refine((cases) => cases.some((item) => item.role === "regression"), {
+      message: "聚焦评估至少需要 1 条 regression，禁止零回归评估",
+    })
+    .refine(
+      (cases) =>
+        cases
+          .filter((item) => item.role === "regression")
+          .every((item) => item.regressionScope !== undefined),
+      {
+        message: "每条 regression 都必须声明 regressionScope=related 或 general",
+      },
+    )
+    .refine(
+      (cases) =>
+        cases.some(
+          (item) =>
+            item.role === "regression" &&
+            item.regressionScope === "related",
+        ),
+      {
+        message: "聚焦评估至少需要 1 条 regressionScope=related 的回归样本",
+      },
+    )
+    .refine(
+      (cases) =>
+        cases.every(
+          (item) => item.role !== "primary" || item.regressionScope === undefined,
+        ),
+      {
+        message: "primary 不得设置 regressionScope",
+      },
+    )
     .describe(
-      "已拼装完整的评估用例（从 build_evaluate_cases 获取；默认 2 条 primary + 1 条 regression；超过 3 条时首次请求前自动裁切；超时再降为 1p+1r 重试一次）",
+      "从 build_evaluate_cases 获取的聚焦评估用例：1 条本次目标 primary + 1～2 条 regression，至少 1 条 related；默认 1 条 related + 1 条 general。多余用例会被裁掉，零回归会被拒绝",
     ),
 });
 
@@ -51,7 +89,7 @@ function evaluateTimerLabel(attempt: EvaluateAttemptLabel): string {
 export const submitEvaluatePolicyPatchTool = defineTool({
   name: "submit_evaluate_policy_patch",
   description:
-    "提交 POST /tenants/:tenantId/reply-policy:evaluate 请求。judgeEnabled 固定为 true。输入须为 build_evaluate_cases 的输出。默认首次评估 2 条 primary + 1 条 regression；传入超过 3 条时首次请求前自动裁切。Hard Gate 或 Fact blocking 未通过时 orchestration.action=rollback_to_propose 且 publishBlocked=true；仅 Judge 未通过时为 decide_with_warnings。超时时自动降为 1 条 primary + 1 条 regression 重试一次，仍超时则报错。发布前必须调用且必须成功；超时/失败时禁止跳过直接 update_policy；update_policy 须与本次 evaluate 的 patch 完全一致，且 hardRecommendedForPublish 与 factRecommendedForPublish 均为 true、publishBlocked=false",
+    "提交聚焦安全评估。首次评估必须包含 1 条本次目标 primary 和 1～2 条 regression，至少 1 条 related；默认 1 条 related + 1 条 general。primary/related 中 patch 新增的 Hard/Fact 问题可阻塞；general 中新增 Hard 问题阻塞，新增 Fact 问题只告警。修改前已存在的问题只告警。超时时优先保留 related 回归重试一次。发布以 orchestration.publishBlocked=false 为准",
   input: SubmitEvaluatePolicyPatchInputSchema,
   output: SubmitEvaluatePolicyPatchOutputSchema,
   execute: async (input, ctx) => {
@@ -102,12 +140,12 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       const degraded = degradeCasesForRetry(firstAttemptCases);
       if (degraded === undefined) {
         throw new Error(
-          `评估超时：本次 ${firstAttemptCases.length} 条用例已是最小规模（1 条 primary + 1 条 regression），仍未在限定时间内完成。请稍后重试，或检查 Reply Authority Service 是否繁忙。`,
+          `评估超时：本次 ${firstAttemptCases.length} 条用例已无法继续精简，仍未在限定时间内完成。请稍后重试，或检查 Reply Authority Service 是否繁忙。`,
         );
       }
 
       ctx.logger.info(
-        `Evaluate timed out with ${firstAttemptCases.length} cases; retrying with degraded ${degraded.length} cases (1p+1r)`,
+        `Evaluate timed out with ${firstAttemptCases.length} cases; retrying with degraded ${degraded.length} cases`,
       );
 
       try {
@@ -132,15 +170,26 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       throw new Error("评估补丁成功但响应数据为空");
     }
 
-    const orchestration = deriveEvaluationOrchestration(data);
+    const generalRegressionCaseIds = new Set(
+      usedCases
+        .filter(
+          (item) =>
+            item.role === "regression" &&
+            item.regressionScope === "general",
+        )
+        .map((item) => item.caseId),
+    );
+    const scopeOptions = { generalRegressionCaseIds };
+    const orchestration = deriveEvaluationOrchestration(data, scopeOptions);
+    const gateDecision = deriveEvaluationGateDecision(data, scopeOptions);
 
     await recordEvaluatePublishGate({
       tenantId: data.tenantId,
       basePolicyVersion: data.basePolicyVersion,
       patchDigest: hashPolicyPatch(input.patch),
       recommendedForPublish: data.summary.recommendedForPublish,
-      hardRecommendedForPublish: data.summary.hardRecommendedForPublish,
-      factRecommendedForPublish: data.summary.factRecommendedForPublish,
+      hardRecommendedForPublish: !gateDecision.hardBlocked,
+      factRecommendedForPublish: !gateDecision.factBlocked,
       publishBlocked: orchestration.publishBlocked,
       orchestrationAction: orchestration.action,
       evaluatedAtMs: Date.now(),
@@ -151,6 +200,12 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       usedCases.length < firstAttemptCases.length
         ? [formatDegradeCasesWarning(firstAttemptCases.length, usedCases.length)]
         : [];
+    const advisoryFactNotice =
+      gateDecision.advisoryFactIssues > 0
+        ? [
+            `通用回归发现 ${String(gateDecision.advisoryFactIssues)} 个本次新增事实问题，仅告警、不阻断本次保存。`,
+          ]
+        : [];
 
     return {
       tenantId: data.tenantId,
@@ -159,8 +214,13 @@ export const submitEvaluatePolicyPatchTool = defineTool({
       summary: data.summary,
       recommendedForPublish: data.summary.recommendedForPublish,
       orchestration,
-      evaluationSummaryMarkdown: formatEvaluationSummaryMarkdown(data),
-      warnings: [...preAttemptWarnings, ...degradedNotice, ...data.warnings],
+      evaluationSummaryMarkdown: formatEvaluationSummaryMarkdown(data, scopeOptions),
+      warnings: [
+        ...preAttemptWarnings,
+        ...degradedNotice,
+        ...advisoryFactNotice,
+        ...data.warnings,
+      ],
     };
   },
 });
